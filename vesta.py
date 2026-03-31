@@ -325,7 +325,6 @@ def try_parse_datetime(value: Any) -> datetime | None:
         "%Y-%m-%d",
         "%m/%d/%Y %H:%M",
         "%m/%d/%y %H:%M",
-        "%m/%d %H:%M",
     ]
 
     for candidate in candidates:
@@ -566,7 +565,10 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
         # NOTE: Experimental — indicator placement may change.
         reserve_cols = 2 if color and profile.cols >= 12 else 0
         available_width = profile.cols - reserve_cols
-        left_width = max(4, min(len(entry["label"]), max(4, available_width // 2)))
+        # Give the label as much space as it needs; only reserve the minimum
+        # required for the value so labels aren't truncated unnecessarily.
+        min_value_space = min(len(entry["value"]), max(4, available_width // 3))
+        left_width = max(4, min(len(entry["label"]), available_width - min_value_space - 1))
         right_width = max(1, available_width - left_width - 1)
         left = ellipsize(entry["label"], left_width).ljust(left_width)
         right = ellipsize(entry["value"], right_width).rjust(right_width)
