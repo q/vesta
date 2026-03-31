@@ -329,8 +329,8 @@ def format_scalar(value: Any) -> str:
 
 def prettify_label(key: str) -> str:
     label = normalize_text(key)
-    # Strip trailing _PCT / _PERCENT so the value's % sign carries that meaning.
-    label = re.sub(r"[_ ]+(PCT|PERCENT)$", "", label)
+    # Strip trailing suffixes where the formatting carries the meaning.
+    label = re.sub(r"[_ ]+(PCT|PERCENT|CURR)$", "", label)
     return label.replace("_", " ").strip()
 
 
@@ -418,8 +418,8 @@ def format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
 
     if isinstance(value, (int, float)):
         n = float(value)
-        if kind == "currency_short":
-            return compact_number(n)
+        if kind in ("currency", "currency_short"):
+            return f"${compact_number(n)}"
         if kind == "percent":
             return f"{smart_round(n)}%"
         if kind == "number":
@@ -623,7 +623,11 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
             continue
         lower_key = key.lower()
         is_pct = any(lower_key.endswith(s) for s in ("_pct", "_percent", "pct", "percent"))
-        kind = "percent" if is_pct and isinstance(value, (int, float)) else "auto"
+        is_curr = lower_key.endswith("_curr")
+        if isinstance(value, (int, float)):
+            kind = "percent" if is_pct else "currency" if is_curr else "auto"
+        else:
+            kind = "auto"
         entries.append(
             {
                 "key": key,

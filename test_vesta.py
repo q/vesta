@@ -313,6 +313,12 @@ class TestPrettifyLabel(unittest.TestCase):
     def test_non_pct_key_unchanged(self):
         self.assertEqual(prettify_label("temperature"), "TEMPERATURE")
 
+    def test_curr_suffix_stripped(self):
+        self.assertEqual(prettify_label("revenue_curr"), "REVENUE")
+
+    def test_compound_curr_suffix_stripped(self):
+        self.assertEqual(prettify_label("total_sales_curr"), "TOTAL SALES")
+
     def test_underscores_become_spaces(self):
         self.assertEqual(prettify_label("bounce_rate"), "BOUNCE RATE")
 
@@ -327,6 +333,16 @@ class TestPctFormatting(unittest.TestCase):
         msg = render_metrics(FLAGSHIP, {"score_pct": 21.32})
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         self.assertNotIn("P C T", all_chars)
+
+    def test_curr_key_value_has_dollar_sign(self):
+        msg = render_metrics(FLAGSHIP, {"revenue_curr": 84210.50})
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("$", all_chars)
+
+    def test_curr_key_label_has_no_curr(self):
+        msg = render_metrics(FLAGSHIP, {"revenue_curr": 84210.50})
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertNotIn("C U R R", all_chars)
 
     def test_non_pct_key_no_percent_sign(self):
         msg = render_metrics(FLAGSHIP, {"score": 21.32})

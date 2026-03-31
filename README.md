@@ -29,6 +29,31 @@ This repo is intentionally focused on practical use, not a big template language
 - `metrics` — generic key/value layout with optional trailing color indicators
 - `auto` — picks a reasonable renderer based on input shape
 
+## Key suffixes
+
+The `metrics` template recognises special suffixes on field names to handle
+formatting automatically. The suffix is always stripped from the label on the board.
+
+| Suffix | Effect |
+|--------|--------|
+| `_pct` / `_percent` | formats value as `3.2%`, adds color tone indicator |
+| `_curr` | formats value as `$84.2K` |
+
+```json
+{
+  "revenue_curr": 84210.50,
+  "sessions": 10823,
+  "growth_pct": 12.4
+}
+```
+
+Renders as:
+```
+REVENUE   $84.2K
+SESSIONS  10.8K
+GROWTH    12% ██
+```
+
 ## Color indicators (experimental)
 
 The `metrics` template supports trailing colored tile indicators on rows.
@@ -39,10 +64,6 @@ Color is driven by semantic tone — not raw cell placement.
 - positive → green
 - negative → red
 - zero → white
-
-Keys ending in `_pct` or `_percent` also get two extra treatments: the suffix is
-stripped from the label (so `wind_delta_pct` renders as `WIND DELTA`), and the
-value is formatted with a `%` sign.
 
 **Explicit tone:** override any field with `_style`:
 
@@ -99,9 +120,9 @@ giving a cleaner look when the data is compact:
 │                                            │
 │      T E M P   6 8                         │
 │      H U M I D I T Y   4 2                 │
-│      W I N D   D E L T A   3 . 2 ██        │
-│      R A I N   P C T   - 1 2 . 5 ██        │
-│                                1 2 : 0 3 P │
+│      W I N D   D E L T A   3 . 2 % ██      │
+│      R A I N   - 1 3 % ██                  │
+│                                  1 : 3 0 P │
 └────────────────────────────────────────────┘
 ```
 
