@@ -421,9 +421,11 @@ def format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
     if isinstance(value, (int, float)):
         n = float(value)
         if kind in ("currency", "currency_short"):
-            return f"${compact_number(n)}"
+            if abs(n) >= 1_000:
+                return f"${compact_number(n)}"
+            return f"${n:.2f}"
         if kind == "percent":
-            return f"{smart_round(n)}%"
+            return f"{smart_round(n, sig_figs=3)}%"
         if kind == "number":
             return compact_number(n if abs(n) >= 1000 else n, decimals=2 if abs(n) < 100 else 1)
         if kind == "auto":
