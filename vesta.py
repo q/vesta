@@ -591,53 +591,82 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
         return RenderedMessage(profile=profile, grid=grid)
 
     columns = list(rows[0].keys())[:3]
-    visible_rows = rows[: max(0, profile.rows - row_idx)]
 
-    widths = infer_widths(columns, visible_rows, profile.cols)
-    header = " ".join(ellipsize(col.replace("_", " ").upper(), widths[col]).ljust(widths[col]) for col in columns)
+    # Determine if any column will produce a color tile, to reserve space.
+    color_col = next((c for c in reversed(columns) if tone_to_color(resolve_tone({c: 0}, c, 0))), None)
+    reserve = 1 if color_col and profile.cols >= 12 else 0
+    available_cols = profile.cols - reserve
+
+    # Use formatted values for width inference.
+    formatted_rows = [
+        {col: format_field(col, record.get(col, ""), profile)[1] for col in columns}
+        for record in rows
+    ]
+    widths = infer_widths(columns, formatted_rows, available_cols)
+
+    # Header row uses prettified, suffix-stripped column names.
+    header = " ".join(ellipsize(prettify_label(col), widths[col]).ljust(widths[col]) for col in columns)
     if row_idx < profile.rows:
         place_line(grid, row_idx, header, align="left")
         row_idx += 1
 
-    for record in visible_rows[: max(0, profile.rows - row_idx)]:
+    visible_rows = rows[: max(0, profile.rows - row_idx)]
+    for record in visible_rows:
         cells = []
+        row_color = None
         for col in columns:
-            raw = format_scalar(record.get(col, ""))
-            is_num = isinstance(record.get(col), (int, float))
-            cell = ellipsize(normalize_text(raw), widths[col])
+            value = record.get(col, "")
+            _, formatted, color = format_field(col, value, profile)
+            if color:
+                row_color = color
+            is_num = isinstance(value, (int, float))
+            cell = ellipsize(formatted, widths[col])
             cells.append(cell.rjust(widths[col]) if is_num else cell.ljust(widths[col]))
-        line = " ".join(cells)
         if row_idx < profile.rows:
-            place_line(grid, row_idx, line, align="left")
+            place_line(grid, row_idx, " ".join(cells), align="left")
+            if row_color and reserve:
+                place_cell(grid, row_idx, profile.cols - 1, row_color)
             row_idx += 1
 
     return RenderedMessage(profile=profile, grid=grid)
 
 
-# NOTE: Experimental. render_metrics is a generic key-value renderer that adds
-# a trailing color tile indicator based on semantic tone. Useful for dashboards
-# where some fields (e.g. percent changes) have a natural positive/negative meaning.
-# Use _style overrides in the input dict to assign tones explicitly per field.
+def format_field(key: str, value: Any, profile: BoardProfile, style: dict | None = None) -> tuple[str, str, Color | None]:
+    """Shared field formatting: returns (label, formatted_value, color).
+    Applies suffix conventions (_pct, _curr), value formatting, and tone resolution."""
+    lower_key = key.lower()
+    is_pct = any(lower_key.endswith(s) for s in ("_pct", "_percent", "pct", "percent"))
+    is_curr = lower_key.endswith("_curr")
+    if isinstance(value, (int, float)):
+        kind = "percent" if is_pct else "currency" if is_curr else "auto"
+    else:
+        kind = "auto"
+    label = prettify_label(key)
+    formatted = format_metric_value(value, kind, profile)
+    data = {key: value}
+    if style:
+        data["_style"] = style
+    color = tone_to_color(resolve_tone(data, key, value))
+    return label, formatted, color
+
+
+def render_data(profile: BoardProfile, payload: dict[str, Any] | list[dict[str, Any]], title: str | None = None, valign: str = "top", align: str = "left") -> RenderedMessage:
+    """Unified renderer for structured data. Accepts a dict (label/value rows) or
+    a list of dicts (columnar table). Applies _pct/_curr suffix formatting and
+    color indicators to all fields regardless of layout."""
+    if isinstance(payload, list):
+        return render_table(profile, payload, title=title)
+    return render_metrics(profile, payload, title=title, valign=valign, align=align)
+
+
 def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None, valign: str = "top", align: str = "left") -> RenderedMessage:
+    style = data.get("_style") if isinstance(data.get("_style"), dict) else None
     entries = []
     for key, value in data.items():
         if key.startswith("_"):
             continue
-        lower_key = key.lower()
-        is_pct = any(lower_key.endswith(s) for s in ("_pct", "_percent", "pct", "percent"))
-        is_curr = lower_key.endswith("_curr")
-        if isinstance(value, (int, float)):
-            kind = "percent" if is_pct else "currency" if is_curr else "auto"
-        else:
-            kind = "auto"
-        entries.append(
-            {
-                "key": key,
-                "label": prettify_label(key),
-                "value": format_metric_value(value, kind, profile),
-                "tone": resolve_tone(data, key, value),
-            }
-        )
+        label, formatted, color = format_field(key, value, profile, style=style)
+        entries.append({"key": key, "label": label, "value": formatted, "tone": color, "color": color})
 
     title_rows = 1 if title else 0
     n_entries = min(len(entries), profile.rows - title_rows)
@@ -651,17 +680,15 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
         row += 1
 
     if align == "center":
-        # Compute natural width of each row: label + space + value + optional color tile.
-        # All rows start at the same left offset, determined by the widest row.
         def natural_width(entry: dict) -> int:
-            has_color = tone_to_color(entry["tone"]) is not None and profile.cols >= 12
+            has_color = entry["color"] is not None and profile.cols >= 12
             return len(entry["label"]) + 1 + len(entry["value"]) + (1 if has_color else 0)
 
         max_width = min(max((natural_width(e) for e in entries[:n_entries]), default=0), profile.cols)
         start_col = max(0, (profile.cols - max_width) // 2)
 
         for entry in entries[:n_entries]:
-            color = tone_to_color(entry["tone"])
+            color = entry["color"]
             label = ellipsize(entry["label"], profile.cols)
             value = ellipsize(entry["value"], profile.cols)
             text = f"{label} {value}"
@@ -673,7 +700,7 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
                 break
     else:
         for entry in entries[:n_entries]:
-            color = tone_to_color(entry["tone"])
+            color = entry["color"]
 
             reserve_cols = 1 if color and profile.cols >= 12 else 0
             available_width = profile.cols - reserve_cols
@@ -698,13 +725,9 @@ def render_auto(profile: BoardProfile, payload: Any, title: str | None = None) -
     if isinstance(payload, str):
         return render_text(profile, payload)
     if isinstance(payload, dict):
-        # Route to metrics if the caller has provided _style overrides,
-        # which signals they want tone-aware rendering. Otherwise use kv.
-        if "_style" in payload:
-            return render_metrics(profile, payload, title=title)
-        return render_kv(profile, payload, title=title)
+        return render_data(profile, payload, title=title)
     if isinstance(payload, list) and payload and all(isinstance(x, dict) for x in payload):
-        return render_table(profile, payload, title=title)
+        return render_data(profile, payload, title=title)
     return render_text(profile, json.dumps(payload, separators=(",", ":")), align="left")
 
 
@@ -932,14 +955,10 @@ def build_message(profile: BoardProfile, template: str, payload: Any, title: str
         if not isinstance(payload, dict):
             raise SystemExit("template=kv requires a JSON object")
         return render_kv(profile, payload, title=title)
-    if template == "table":
-        if not (isinstance(payload, list) and all(isinstance(x, dict) for x in payload)):
-            raise SystemExit("template=table requires CSV or a JSON array of objects")
-        return render_table(profile, payload, title=title)
-    if template == "metrics":
-        if not isinstance(payload, dict):
-            raise SystemExit("template=metrics requires a JSON object")
-        return render_metrics(profile, payload, title=title, valign=valign, align=align)
+    if template in ("data", "table", "metrics"):  # table/metrics kept as aliases
+        if not isinstance(payload, (dict, list)):
+            raise SystemExit("template=data requires a JSON object or array of objects")
+        return render_data(profile, payload, title=title, valign=valign, align=align)
     if template == "auto":
         return render_auto(profile, payload, title=title)
     raise SystemExit(f"unknown template: {template}")
@@ -951,7 +970,7 @@ def cli(argv: list[str] | None = None) -> int:
 
     def add_common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--profile", choices=sorted(PROFILES), default="flagship")
-        p.add_argument("--template", choices=["auto", "text", "kv", "table", "metrics"], default="auto")
+        p.add_argument("--template", choices=["auto", "text", "kv", "data", "table", "metrics"], default="auto")
         p.add_argument("--visible-spaces", action="store_true", help="Show spaces as · in terminal preview")
         p.add_argument("--cell-width", type=int, default=2, help="Terminal preview width per board cell")
         p.add_argument("--no-ansi", action="store_true", help="Disable ANSI color in terminal preview")

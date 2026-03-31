@@ -24,10 +24,11 @@ This repo is intentionally focused on practical use, not a big template language
 ## Templates
 
 - `text` — simple wrapped text
-- `kv` — key/value rows
-- `table` — compact table from CSV or JSON array of objects
-- `metrics` — generic key/value layout with optional trailing color indicators
-- `auto` — picks a reasonable renderer based on input shape
+- `kv` — plain key/value rows, no formatting or color
+- `data` — structured data: pass a JSON object for label/value rows, or a JSON array of objects for a columnar table. Applies suffix formatting (`_pct`, `_curr`) and color indicators to all fields.
+- `auto` — picks a reasonable renderer based on input shape (default)
+
+`metrics` and `table` are kept as aliases for `data`.
 
 ## Key suffixes
 
@@ -101,7 +102,7 @@ implicit — wherever `good` sits numerically is the green end:
 indicators, why, and what thresholds trigger each zone:
 
 ```bash
-cat metrics.json | vesta render --template metrics --preview-only --explain
+cat metrics.json | vesta render --template data --preview-only --explain
 ```
 
 ## Layout flags
@@ -135,7 +136,7 @@ Use **`--force-timestamp`** to place it regardless.
 Defaults to local system time. 24h locale support is not yet handled.
 
 ```bash
-cat metrics.json | vesta render --template metrics \
+cat metrics.json | vesta render --template data \
   --valign center --align center --timestamp --preview-only
 ```
 
@@ -143,7 +144,7 @@ cat metrics.json | vesta render --template metrics \
 JSON output from `--json-only`), vesta decodes and previews it directly:
 
 ```bash
-cat testdata/metrics_styled.json | vesta render --template metrics --json-only > saved.json
+cat testdata/metrics_styled.json | vesta render --template data --json-only > saved.json
 cat saved.json | vesta render --preview-only
 ```
 
@@ -198,7 +199,7 @@ echo '{
     "conversion_pct": {"good": 8, "bad": 2},
     "bounce_rate_pct": {"good": 30, "bad": 80}
   }
-}' | vesta render --template metrics --valign center --align center --timestamp --preview-only --explain
+}' | vesta render --template data --valign center --align center --timestamp --preview-only --explain
 ```
 
 Preview only (no character output):
@@ -238,7 +239,7 @@ override if needed.
 Use the Note profile:
 
 ```bash
-cat data.json | vesta render --profile note --template metrics
+cat data.json | vesta render --profile note --template data
 ```
 
 ## Current status

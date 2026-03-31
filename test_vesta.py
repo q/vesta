@@ -14,6 +14,8 @@ from vesta import (
     prettify_label,
     render_kv,
     smart_round,
+    format_field,
+    render_data,
     render_metrics,
     render_table,
     render_text,
@@ -562,6 +564,65 @@ class TestRenderTable(unittest.TestCase):
         msg = render_table(FLAGSHIP, rows)
         self.assertEqual(len(msg.grid), 6)
         self.assertEqual(len(msg.grid[0]), 22)
+
+
+class TestRenderData(unittest.TestCase):
+    def test_dict_dispatches_to_kv_layout(self):
+        msg = render_data(FLAGSHIP, {"temp": 68, "humidity": 42})
+        self.assertEqual(len(msg.grid), FLAGSHIP.rows)
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("TEMP", all_chars)
+
+    def test_list_dispatches_to_table_layout(self):
+        rows = [{"ticker": "DDOG", "price_curr": 118.35, "change_pct": 2.19}]
+        msg = render_data(FLAGSHIP, rows)
+        self.assertEqual(len(msg.grid), FLAGSHIP.rows)
+
+    def test_list_applies_suffix_formatting(self):
+        rows = [{"ticker": "DDOG", "price_curr": 118.35, "change_pct": 2.19}]
+        msg = render_data(FLAGSHIP, rows)
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("$", all_chars)
+        self.assertIn("%", all_chars)
+
+    def test_list_has_color_indicator(self):
+        rows = [{"ticker": "DDOG", "price_curr": 118.35, "change_pct": 2.19}]
+        msg = render_data(FLAGSHIP, rows)
+        all_colors = [c for row in msg.grid for c in row if isinstance(c, Color)]
+        self.assertTrue(len(all_colors) > 0)
+
+    def test_list_header_strips_suffix(self):
+        rows = [{"ticker": "DDOG", "price_curr": 118.35, "change_pct": 2.19}]
+        msg = render_data(FLAGSHIP, rows)
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertNotIn("CURR", all_chars)
+        self.assertNotIn("PCT", all_chars)
+
+
+class TestFormatField(unittest.TestCase):
+    def test_pct_suffix_formats_as_percent(self):
+        _, value, _ = format_field("score_pct", 21.32, FLAGSHIP)
+        self.assertIn("%", value)
+
+    def test_curr_suffix_formats_as_currency(self):
+        _, value, _ = format_field("revenue_curr", 84210.50, FLAGSHIP)
+        self.assertIn("$", value)
+
+    def test_pct_auto_tone(self):
+        _, _, color = format_field("change_pct", 5.0, FLAGSHIP)
+        self.assertEqual(color, Color.GREEN)
+
+    def test_negative_pct_auto_tone(self):
+        _, _, color = format_field("change_pct", -5.0, FLAGSHIP)
+        self.assertEqual(color, Color.RED)
+
+    def test_plain_field_no_color(self):
+        _, _, color = format_field("sessions", 1000, FLAGSHIP)
+        self.assertIsNone(color)
+
+    def test_style_override(self):
+        _, _, color = format_field("sessions", 1000, FLAGSHIP, style={"sessions": "good"})
+        self.assertEqual(color, Color.GREEN)
 
 
 class TestPreview(unittest.TestCase):
