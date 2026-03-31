@@ -32,30 +32,50 @@ This repo is intentionally focused on practical use, not a big template language
 The `metrics` template supports trailing colored tile indicators on rows.
 Color is driven by semantic tone — not raw cell placement.
 
-Tone is auto-detected when a field name contains `pct`, `percent`, `yoy`,
+**Auto-detection:** tone is inferred when a field name contains `pct`, `percent`,
 `change`, `delta`, or `diff` and the value is numeric:
 - positive → green
 - negative → red
 - zero → white
 
-Override tone per field with `_style` in your JSON:
+**Explicit tone:** override any field with `_style`:
 
 ```json
 {
   "score": 91.2,
-  "visitors": 4823,
   "_style": {
-    "score": "good",
-    "visitors": "warn"
+    "score": "good"
   }
 }
 ```
 
 Accepted tone names: `good`, `bad`, `warn`, `info`, `neutral`, `muted`,
-or any color name directly: `green`, `red`, `yellow`, `blue`, `white`,
-`black`, `violet`, `orange`.
+or any color directly: `green`, `red`, `yellow`, `blue`, `white`, `black`,
+`violet`, `orange`.
+
+**Range-based tone:** specify `good` and `bad` thresholds and the indicator
+will follow a 4-step green → yellow → orange → red gradient. Direction is
+implicit — wherever `good` sits numerically is the green end:
+
+```json
+{
+  "bounce_rate": 68.4,
+  "conversion": 3.2,
+  "_style": {
+    "bounce_rate": {"good": 30, "bad": 80},
+    "conversion":  {"good": 8,  "bad": 2}
+  }
+}
+```
 
 `_style` and other `_`-prefixed keys are never shown on the board.
+
+**Debug flag:** add `--explain` to see a breakdown of which fields got color
+indicators, why, and what thresholds trigger each zone:
+
+```bash
+cat metrics.json | python vesta.py render --template metrics --preview-only --explain
+```
 
 ## Why this exists
 
