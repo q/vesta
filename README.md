@@ -101,7 +101,7 @@ implicit — wherever `good` sits numerically is the green end:
 indicators, why, and what thresholds trigger each zone:
 
 ```bash
-cat metrics.json | python vesta.py render --template metrics --preview-only --explain
+cat metrics.json | vesta render --template metrics --preview-only --explain
 ```
 
 ## Layout flags
@@ -135,7 +135,7 @@ Use **`--force-timestamp`** to place it regardless.
 Defaults to local system time. 24h locale support is not yet handled.
 
 ```bash
-cat metrics.json | python vesta.py render --template metrics \
+cat metrics.json | vesta render --template metrics \
   --valign center --align center --timestamp --preview-only
 ```
 
@@ -143,8 +143,8 @@ cat metrics.json | python vesta.py render --template metrics \
 JSON output from `--json-only`), vesta decodes and previews it directly:
 
 ```bash
-cat testdata/metrics_styled.json | python vesta.py render --template metrics --json-only > saved.json
-cat saved.json | python vesta.py render --preview-only
+cat testdata/metrics_styled.json | vesta render --template metrics --json-only > saved.json
+cat saved.json | vesta render --preview-only
 ```
 
 ## Why this exists
@@ -228,7 +228,7 @@ cat data.json | vesta post-local --api-key $VESTABOARD_LOCAL_API_KEY
 Preview what's currently on your board:
 
 ```bash
-python vesta.py read-cloud
+vesta read-cloud
 ```
 
 Uses `VESTABOARD_TOKEN` from the environment. Board profile (flagship vs note) is
@@ -238,7 +238,7 @@ override if needed.
 Use the Note profile:
 
 ```bash
-cat data.json | python vesta.py render --profile note --template metrics
+cat data.json | vesta render --profile note --template metrics
 ```
 
 ## Current status
