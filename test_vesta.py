@@ -11,6 +11,7 @@ from vesta import (
     encode_cell,
     format_metric_value,
     place_timestamp,
+    prettify_label,
     render_kv,
     render_metrics,
     render_table,
@@ -267,6 +268,40 @@ class TestTone(unittest.TestCase):
 
     def test_range_equal_good_bad_is_neutral(self):
         self.assertEqual(tone_from_range(50, good=50, bad=50), "neutral")
+
+
+class TestPrettifyLabel(unittest.TestCase):
+    def test_pct_suffix_stripped(self):
+        self.assertEqual(prettify_label("wind_pct"), "WIND")
+
+    def test_percent_suffix_stripped(self):
+        self.assertEqual(prettify_label("rain_percent"), "RAIN")
+
+    def test_compound_pct_suffix_stripped(self):
+        self.assertEqual(prettify_label("wind_delta_pct"), "WIND DELTA")
+
+    def test_non_pct_key_unchanged(self):
+        self.assertEqual(prettify_label("temperature"), "TEMPERATURE")
+
+    def test_underscores_become_spaces(self):
+        self.assertEqual(prettify_label("bounce_rate"), "BOUNCE RATE")
+
+
+class TestPctFormatting(unittest.TestCase):
+    def test_pct_key_value_has_percent_sign(self):
+        msg = render_metrics(FLAGSHIP, {"score_pct": 21.32})
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("%", all_chars)
+
+    def test_pct_key_label_has_no_pct(self):
+        msg = render_metrics(FLAGSHIP, {"score_pct": 21.32})
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertNotIn("P C T", all_chars)
+
+    def test_non_pct_key_no_percent_sign(self):
+        msg = render_metrics(FLAGSHIP, {"score": 21.32})
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertNotIn("%", all_chars)
 
 
 class TestRenderMetrics(unittest.TestCase):

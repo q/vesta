@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -326,7 +327,10 @@ def format_scalar(value: Any) -> str:
 
 
 def prettify_label(key: str) -> str:
-    return normalize_text(key).replace("_", " ")
+    label = normalize_text(key)
+    # Strip trailing _PCT / _PERCENT so the value's % sign carries that meaning.
+    label = re.sub(r"[_ ]+(PCT|PERCENT)$", "", label)
+    return label.replace("_", " ").strip()
 
 
 def compact_number(value: float, decimals: int = 2) -> str:
@@ -602,11 +606,14 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
     for key, value in data.items():
         if key.startswith("_"):
             continue
+        lower_key = key.lower()
+        is_pct = any(lower_key.endswith(s) for s in ("_pct", "_percent", "pct", "percent"))
+        kind = "percent" if is_pct and isinstance(value, (int, float)) else "auto"
         entries.append(
             {
                 "key": key,
                 "label": prettify_label(key),
-                "value": format_metric_value(value, "auto", profile),
+                "value": format_metric_value(value, kind, profile),
                 "tone": resolve_tone(data, key, value),
             }
         )
