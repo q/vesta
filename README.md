@@ -40,6 +40,10 @@ Color is driven by semantic tone — not raw cell placement.
 - negative → red
 - zero → white
 
+Keys ending in `_pct` or `_percent` also get two extra treatments: the suffix is
+stripped from the label (so `wind_delta_pct` renders as `WIND DELTA`), and the
+value is formatted with a `%` sign.
+
 **Explicit tone:** override any field with `_style`:
 
 ```json
