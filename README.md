@@ -85,6 +85,22 @@ cat metrics.json | python vesta.py render --template metrics --preview-only --ex
 Default is `top`. Use `center` when you have fewer rows of data than the
 board height and want breathing room above and below.
 
+**`--align [left|center]`** — horizontal alignment of metrics rows.
+Default is `left`. Use `center` to indent the content block as a unit —
+all rows start at the same left offset (determined by the widest row),
+giving a cleaner look when the data is compact:
+
+```
+┌────────────── flagship 6x22 ───────────────┐
+│                                            │
+│      T E M P   6 8                         │
+│      H U M I D I T Y   4 2                 │
+│      W I N D   D E L T A   3 . 2 ██        │
+│      R A I N   P C T   - 1 2 . 5 ██        │
+│                                1 2 : 0 3 P │
+└────────────────────────────────────────────┘
+```
+
 **`--timestamp`** — adds the current time (`10:01A`, `9:30P`) to the
 bottom-right corner. Requires the timestamp width plus a 2-cell buffer to
 be blank at the right of the last row — silently skipped if there isn't room.
@@ -95,7 +111,7 @@ Defaults to local system time. 24h locale support is not yet handled.
 
 ```bash
 cat metrics.json | python vesta.py render --template metrics \
-  --valign center --timestamp --preview-only
+  --valign center --align center --timestamp --preview-only
 ```
 
 **Preview a saved board** — if the input is a raw character code grid (the

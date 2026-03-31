@@ -597,7 +597,7 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
 # a trailing color tile indicator based on semantic tone. Useful for dashboards
 # where some fields (e.g. percent changes) have a natural positive/negative meaning.
 # Use _style overrides in the input dict to assign tones explicitly per field.
-def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None, valign: str = "top") -> RenderedMessage:
+def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None, valign: str = "top", align: str = "left") -> RenderedMessage:
     entries = []
     for key, value in data.items():
         if key.startswith("_"):
@@ -622,27 +622,45 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
         place_line(grid, row, title, align="center")
         row += 1
 
-    for entry in entries[:n_entries]:
-        color = tone_to_color(entry["tone"])
+    if align == "center":
+        # Compute natural width of each row: label + space + value + optional color tile.
+        # All rows start at the same left offset, determined by the widest row.
+        def natural_width(entry: dict) -> int:
+            has_color = tone_to_color(entry["tone"]) is not None and profile.cols >= 12
+            return len(entry["label"]) + 1 + len(entry["value"]) + (1 if has_color else 0)
 
-        # Reserve the last two columns for a trailing color indicator tile.
-        # NOTE: Experimental — indicator placement may change.
-        reserve_cols = 1 if color and profile.cols >= 12 else 0
-        available_width = profile.cols - reserve_cols
-        # Give the label as much space as it needs; only reserve the minimum
-        # required for the value so labels aren't truncated unnecessarily.
-        min_value_space = min(len(entry["value"]), max(4, available_width // 3))
-        left_width = max(4, min(len(entry["label"]), available_width - min_value_space - 1))
-        right_width = max(1, available_width - left_width - 1)
-        left = ellipsize(entry["label"], left_width).ljust(left_width)
-        right = ellipsize(entry["value"], right_width).rjust(right_width)
-        place_line(grid, row, f"{left} {right}", align="left")
+        max_width = min(max((natural_width(e) for e in entries[:n_entries]), default=0), profile.cols)
+        start_col = max(0, (profile.cols - max_width) // 2)
 
-        if color and profile.cols >= 12:
-            place_cell(grid, row, profile.cols - 1, color)
-        row += 1
-        if row >= profile.rows:
-            break
+        for entry in entries[:n_entries]:
+            color = tone_to_color(entry["tone"])
+            label = ellipsize(entry["label"], profile.cols)
+            value = ellipsize(entry["value"], profile.cols)
+            text = f"{label} {value}"
+            place_line(grid, row, text, align="left", start_col=start_col)
+            if color and profile.cols >= 12:
+                place_cell(grid, row, start_col + len(text), color)
+            row += 1
+            if row >= profile.rows:
+                break
+    else:
+        for entry in entries[:n_entries]:
+            color = tone_to_color(entry["tone"])
+
+            reserve_cols = 1 if color and profile.cols >= 12 else 0
+            available_width = profile.cols - reserve_cols
+            min_value_space = min(len(entry["value"]), max(4, available_width // 3))
+            left_width = max(4, min(len(entry["label"]), available_width - min_value_space - 1))
+            right_width = max(1, available_width - left_width - 1)
+            left = ellipsize(entry["label"], left_width).ljust(left_width)
+            right = ellipsize(entry["value"], right_width).rjust(right_width)
+            place_line(grid, row, f"{left} {right}", align="left")
+
+            if color and profile.cols >= 12:
+                place_cell(grid, row, profile.cols - 1, color)
+            row += 1
+            if row >= profile.rows:
+                break
 
     return RenderedMessage(profile=profile, grid=grid)
 
@@ -877,7 +895,7 @@ def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: boo
 # -----------------------------------------------------------------------------
 
 
-def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top") -> RenderedMessage:
+def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top", align: str = "left") -> RenderedMessage:
     if is_raw_grid(payload, profile):
         return from_characters(payload, profile)
     if template == "text":
@@ -893,7 +911,7 @@ def build_message(profile: BoardProfile, template: str, payload: Any, title: str
     if template == "metrics":
         if not isinstance(payload, dict):
             raise SystemExit("template=metrics requires a JSON object")
-        return render_metrics(profile, payload, title=title, valign=valign)
+        return render_metrics(profile, payload, title=title, valign=valign, align=align)
     if template == "auto":
         return render_auto(profile, payload, title=title)
     raise SystemExit(f"unknown template: {template}")
@@ -913,6 +931,7 @@ def cli(argv: list[str] | None = None) -> int:
         p.add_argument("--input", default="-", help="Path to input file, or - for stdin")
         p.add_argument("--no-preview", action="store_true")
         p.add_argument("--valign", choices=["top", "center"], default="top", help="Vertical alignment of content block")
+        p.add_argument("--align", choices=["left", "center"], default="left", help="Horizontal alignment of metrics rows")
         p.add_argument("--timestamp", action="store_true", help="Add current time to bottom-right if space allows")
         p.add_argument("--force-timestamp", action="store_true", help="Add current time to bottom-right, overwriting if needed")
         p.add_argument("--tz", default=None, help="Timezone for timestamp, e.g. America/New_York (default: local)")
@@ -958,7 +977,7 @@ def cli(argv: list[str] | None = None) -> int:
 
     profile = PROFILES[args.profile]
     payload = load_payload(args.input)
-    message = build_message(profile, args.template, payload, args.title, valign=args.valign)
+    message = build_message(profile, args.template, payload, args.title, valign=args.valign, align=args.align)
 
     if getattr(args, "force_timestamp", False) or getattr(args, "timestamp", False):
         message = place_timestamp(message, tz=args.tz, force=getattr(args, "force_timestamp", False))

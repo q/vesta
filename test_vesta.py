@@ -360,6 +360,54 @@ class TestValign(unittest.TestCase):
         self.assertEqual(top, center)
 
 
+class TestAlign(unittest.TestCase):
+    def test_left_starts_at_col_zero(self):
+        msg = render_metrics(FLAGSHIP, {"score": 95}, align="left")
+        first_content_col = next(
+            i for i, c in enumerate(msg.grid[0]) if c != " "
+        )
+        self.assertEqual(first_content_col, 0)
+
+    def test_center_starts_after_col_zero(self):
+        msg = render_metrics(FLAGSHIP, {"score": 95}, align="center")
+        first_content_col = next(
+            i for i, c in enumerate(msg.grid[0]) if c != " "
+        )
+        self.assertGreater(first_content_col, 0)
+
+    def test_center_all_rows_same_start_col(self):
+        # All content rows should start at the same left offset
+        data = {"temp": 68, "humidity": 42, "wind_delta": 3.2}
+        msg = render_metrics(FLAGSHIP, data, align="center")
+        start_cols = [
+            next((i for i, c in enumerate(row) if c != " "), None)
+            for row in msg.grid
+            if any(c != " " for c in row)
+        ]
+        self.assertEqual(len(set(start_cols)), 1)
+
+    def test_center_color_tile_adjacent_to_value(self):
+        # No space between value and color tile in centered layout
+        msg = render_metrics(FLAGSHIP, {"score_pct": 5.0}, align="center")
+        for row in msg.grid:
+            for i, cell in enumerate(row):
+                if isinstance(cell, Color):
+                    self.assertNotEqual(row[i - 1], " ")
+
+    def test_center_left_produce_same_characters(self):
+        # Centered and left layouts should encode to the same non-space characters
+        data = {"score": 95, "count": 42}
+        left_chars = set(
+            c for row in render_metrics(FLAGSHIP, data, align="left").grid
+            for c in row if c != " "
+        )
+        center_chars = set(
+            c for row in render_metrics(FLAGSHIP, data, align="center").grid
+            for c in row if c != " "
+        )
+        self.assertEqual(left_chars, center_chars)
+
+
 class TestTimestamp(unittest.TestCase):
     def test_timestamp_placed_when_last_row_empty(self):
         msg = render_metrics(FLAGSHIP, {"score": 95}, valign="top")
