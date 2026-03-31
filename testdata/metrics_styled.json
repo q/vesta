@@ -5,6 +5,7 @@
   "bounce_rate": 68.4,
   "_style": {
     "revenue": "good",
-    "bounce_rate": "bad"
+    "conversion": {"good": 8, "bad": 2},
+    "bounce_rate": {"good": 30, "bad": 80}
   }
 }

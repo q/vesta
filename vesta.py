@@ -412,9 +412,27 @@ def infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: in
 # -----------------------------------------------------------------------------
 # Tone resolution
 # NOTE: Experimental. Tones drive the trailing color indicator in render_metrics.
-# Auto-detection uses key name heuristics (pct/percent/yoy/change/delta/diff →
+# Auto-detection uses key name heuristics (pct/percent/change/delta/diff →
 # positive/negative). Callers can override per-field via _style in their input.
+# Range-based coloring: {"good": <threshold>, "bad": <threshold>} maps a value
+# to a 4-step green→yellow→orange→red gradient. Direction is implicit — wherever
+# "good" sits numerically is the green end.
 # -----------------------------------------------------------------------------
+
+
+def tone_from_range(value: float, good: float, bad: float) -> str:
+    """Map a value to a 4-step tone gradient between good (green) and bad (red).
+    NOTE: Experimental — part of the range-based color support in _style."""
+    if good == bad:
+        return "neutral"
+    t = max(0.0, min(1.0, (value - good) / (bad - good)))
+    if t < 0.25:
+        return "good"    # green
+    if t < 0.5:
+        return "warn"    # yellow
+    if t < 0.75:
+        return "orange"  # orange
+    return "bad"         # red
 
 
 def resolve_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
@@ -425,6 +443,9 @@ def resolve_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
         if isinstance(override, str):
             return override.lower()
         if isinstance(override, dict):
+            # Range-based: {"good": <threshold>, "bad": <threshold>}
+            if "good" in override and "bad" in override and isinstance(value, (int, float)):
+                return tone_from_range(float(value), float(override["good"]), float(override["bad"]))
             tone = override.get("tone")
             if isinstance(tone, str):
                 return tone.lower()
@@ -432,7 +453,7 @@ def resolve_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
     # Auto-detect tone for numeric fields whose key name implies a change/delta.
     if isinstance(value, (int, float)):
         lower_key = key.lower()
-        if any(p in lower_key for p in ("pct", "percent", "yoy", "change", "delta", "diff")):
+        if any(p in lower_key for p in ("pct", "percent", "change", "delta", "diff")):
             n = float(value)
             if n > 0:
                 return "good"
@@ -688,6 +709,71 @@ def post_local(
 
 
 # -----------------------------------------------------------------------------
+# Debug / explain
+# NOTE: Experimental — tied to the experimental tone/color system.
+# -----------------------------------------------------------------------------
+
+
+def _ansi_block(color: Color, ansi: bool) -> str:
+    if ansi and color in COLOR_TO_ANSI:
+        return f"{COLOR_TO_ANSI[color]}██{ANSI_RESET}"
+    return "██"
+
+
+def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: bool = True) -> str:
+    """Return a human-readable breakdown of tone/color decisions for a metrics payload.
+    Returns an empty string if no color indicators are present."""
+    style = data.get("_style") if isinstance(data.get("_style"), dict) else {}
+    rows = []
+
+    for key, value in data.items():
+        if key.startswith("_"):
+            continue
+        tone = resolve_tone(data, key, value)
+        color = tone_to_color(tone)
+        if color is None:
+            continue
+
+        label = prettify_label(key)
+        fmt_value = format_metric_value(value, "auto", profile)
+        block = _ansi_block(color, ansi_color)
+        override = style.get(key)
+
+        if isinstance(override, str):
+            rows.append(f"  {label:<20} {fmt_value:>8}   {block} explicit")
+
+        elif isinstance(override, dict) and "good" in override and "bad" in override:
+            good = float(override["good"])
+            bad = float(override["bad"])
+            b1 = good + (bad - good) * 0.25
+            b2 = good + (bad - good) * 0.50
+            b3 = good + (bad - good) * 0.75
+
+            if good < bad:
+                zones = (
+                    f"{_ansi_block(Color.GREEN,  ansi_color)}≤{b1:g}"
+                    f" · {_ansi_block(Color.YELLOW, ansi_color)}{b1:g}–{b2:g}"
+                    f" · {_ansi_block(Color.ORANGE, ansi_color)}{b2:g}–{b3:g}"
+                    f" · {_ansi_block(Color.RED,    ansi_color)}≥{b3:g}"
+                )
+            else:
+                zones = (
+                    f"{_ansi_block(Color.GREEN,  ansi_color)}≥{b1:g}"
+                    f" · {_ansi_block(Color.YELLOW, ansi_color)}{b2:g}–{b1:g}"
+                    f" · {_ansi_block(Color.ORANGE, ansi_color)}{b3:g}–{b2:g}"
+                    f" · {_ansi_block(Color.RED,    ansi_color)}≤{b3:g}"
+                )
+            rows.append(f"  {label:<20} {fmt_value:>8}   {block} range good={good:g} bad={bad:g}   {zones}")
+
+        else:
+            rows.append(f"  {label:<20} {fmt_value:>8}   {block} auto")
+
+    if not rows:
+        return ""
+    return "\n".join(["── color indicators " + "─" * 20, *rows])
+
+
+# -----------------------------------------------------------------------------
 # CLI
 # -----------------------------------------------------------------------------
 
@@ -730,6 +816,7 @@ def cli(argv: list[str] | None = None) -> int:
     add_common(render_p)
     render_p.add_argument("--preview-only", action="store_true", help="Print only the terminal preview")
     render_p.add_argument("--json-only", action="store_true", help="Print only the raw character array JSON")
+    render_p.add_argument("--explain", action="store_true", help="Show color indicator breakdown after preview")
 
     cloud_p = sub.add_parser("post-cloud", help="Render and send via Cloud API")
     add_common(cloud_p)
@@ -763,6 +850,11 @@ def cli(argv: list[str] | None = None) -> int:
     if args.command == "render":
         if args.preview_only and args.json_only:
             raise SystemExit("choose only one of --preview-only or --json-only")
+        if getattr(args, "explain", False) and isinstance(payload, dict):
+            explanation = explain_metrics(payload, profile, ansi_color=not args.no_ansi)
+            if explanation:
+                print(explanation)
+                print()
         if args.preview_only:
             return 0
         print(json.dumps(message.to_characters()))

@@ -15,6 +15,7 @@ from vesta import (
     render_table,
     render_text,
     resolve_tone,
+    tone_from_range,
     tone_to_color,
     wrap_text,
 )
@@ -183,9 +184,9 @@ class TestTone(unittest.TestCase):
         data = {"delta": 0}
         self.assertEqual(resolve_tone(data, "delta", 0), "neutral")
 
-    def test_yoy_positive(self):
-        data = {"growth_yoy": 8.0}
-        self.assertEqual(resolve_tone(data, "growth_yoy", 8.0), "good")
+    def test_growth_delta_positive(self):
+        data = {"growth_delta": 8.0}
+        self.assertEqual(resolve_tone(data, "growth_delta", 8.0), "good")
 
     def test_diff_negative(self):
         data = {"diff": -1}
@@ -220,6 +221,51 @@ class TestTone(unittest.TestCase):
 
     def test_tone_to_color_case_insensitive(self):
         self.assertEqual(tone_to_color("GOOD"), Color.GREEN)
+
+    # Range-based tone
+    def test_range_at_good_end(self):
+        self.assertEqual(tone_from_range(30, good=30, bad=80), "good")
+
+    def test_range_at_bad_end(self):
+        self.assertEqual(tone_from_range(80, good=30, bad=80), "bad")
+
+    def test_range_better_than_good_clamps_green(self):
+        self.assertEqual(tone_from_range(10, good=30, bad=80), "good")
+
+    def test_range_worse_than_bad_clamps_red(self):
+        self.assertEqual(tone_from_range(99, good=30, bad=80), "bad")
+
+    def test_range_midpoint_is_yellow_or_orange(self):
+        # Midpoint (t=0.5) is the boundary between yellow and orange
+        result = tone_from_range(55, good=30, bad=80)
+        self.assertIn(result, ("warn", "orange"))
+
+    def test_range_lower_quarter_is_yellow(self):
+        # t=0.375 → yellow
+        self.assertEqual(tone_from_range(48.75, good=30, bad=80), "warn")
+
+    def test_range_upper_quarter_is_orange(self):
+        # t=0.625 → orange
+        self.assertEqual(tone_from_range(61.25, good=30, bad=80), "orange")
+
+    def test_range_inverted_direction(self):
+        # Higher is better: good=8, bad=2 (conversion rate)
+        self.assertEqual(tone_from_range(8, good=8, bad=2), "good")
+        self.assertEqual(tone_from_range(2, good=8, bad=2), "bad")
+        self.assertEqual(tone_from_range(10, good=8, bad=2), "good")  # clamp
+
+    def test_range_via_style_override(self):
+        data = {"bounce_rate": 68.4, "_style": {"bounce_rate": {"good": 30, "bad": 80}}}
+        # t = (68.4 - 30) / (80 - 30) = 38.4 / 50 = 0.768 → bad (red)
+        self.assertEqual(resolve_tone(data, "bounce_rate", 68.4), "bad")
+
+    def test_range_good_value_via_style(self):
+        data = {"bounce_rate": 25.0, "_style": {"bounce_rate": {"good": 30, "bad": 80}}}
+        # t = (25 - 30) / 50 = -0.1 → clamped to 0 → good (green)
+        self.assertEqual(resolve_tone(data, "bounce_rate", 25.0), "good")
+
+    def test_range_equal_good_bad_is_neutral(self):
+        self.assertEqual(tone_from_range(50, good=50, bad=50), "neutral")
 
 
 class TestRenderMetrics(unittest.TestCase):
