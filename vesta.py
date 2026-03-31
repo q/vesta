@@ -4,6 +4,7 @@ import argparse
 import csv
 import io
 import json
+import math
 import os
 import re
 import sys
@@ -333,6 +334,21 @@ def prettify_label(key: str) -> str:
     return label.replace("_", " ").strip()
 
 
+def smart_round(value: float, sig_figs: int = 2) -> str:
+    """Format a number to sig_figs significant figures, stripping trailing zeros."""
+    if value == 0:
+        return "0"
+    magnitude = math.floor(math.log10(abs(value)))
+    decimals = max(0, sig_figs - 1 - magnitude)
+    # Use ROUND_HALF_UP to avoid Python's default banker's rounding (e.g. -12.5 → -13, not -12).
+    factor = 10 ** decimals
+    rounded = math.copysign(math.floor(abs(value) * factor + 0.5) / factor, value)
+    formatted = f"{rounded:.{decimals}f}"
+    if decimals > 0:
+        formatted = formatted.rstrip("0").rstrip(".")
+    return formatted
+
+
 def compact_number(value: float, decimals: int = 2) -> str:
     abs_value = abs(value)
     if abs_value >= 1_000_000_000:
@@ -405,8 +421,7 @@ def format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
         if kind == "currency_short":
             return compact_number(n)
         if kind == "percent":
-            formatted = f"{n:.2f}".rstrip("0").rstrip(".")
-            return f"{formatted}%"
+            return f"{smart_round(n)}%"
         if kind == "number":
             return compact_number(n if abs(n) >= 1000 else n, decimals=2 if abs(n) < 100 else 1)
         if kind == "auto":

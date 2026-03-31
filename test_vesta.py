@@ -13,6 +13,7 @@ from vesta import (
     place_timestamp,
     prettify_label,
     render_kv,
+    smart_round,
     render_metrics,
     render_table,
     render_text,
@@ -268,6 +269,35 @@ class TestTone(unittest.TestCase):
 
     def test_range_equal_good_bad_is_neutral(self):
         self.assertEqual(tone_from_range(50, good=50, bad=50), "neutral")
+
+
+class TestSmartRound(unittest.TestCase):
+    def test_large_number_no_decimals(self):
+        self.assertEqual(smart_round(288.17), "288")
+
+    def test_tens_no_decimals(self):
+        self.assertEqual(smart_round(28.17), "28")
+
+    def test_single_digit_one_decimal(self):
+        self.assertEqual(smart_round(3.17), "3.2")
+
+    def test_sub_one_two_decimals(self):
+        self.assertEqual(smart_round(0.317), "0.32")
+
+    def test_negative_rounds_away_from_zero(self):
+        self.assertEqual(smart_round(-12.5), "-13")
+
+    def test_positive_half_rounds_up(self):
+        self.assertEqual(smart_round(12.5), "13")
+
+    def test_zero(self):
+        self.assertEqual(smart_round(0), "0")
+
+    def test_whole_number_no_trailing_zero(self):
+        self.assertEqual(smart_round(10.0), "10")
+
+    def test_hundred(self):
+        self.assertEqual(smart_round(100.0), "100")
 
 
 class TestPrettifyLabel(unittest.TestCase):
