@@ -1,12 +1,20 @@
 [project]
 name = "vesta"
 version = "0.1.0"
-description = "Add your description here"
+description = "Formatter, previewer, and publisher for Vestaboard devices"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
+license = { text = "MIT" }
 dependencies = [
-    "requests>=2.33.1",
+    "requests>=2.28",
 ]
+
+[project.urls]
+Homepage = "https://github.com/q/vesta"
+Repository = "https://github.com/q/vesta"
+
+[project.scripts]
+vesta = "vesta:main"
 
 [dependency-groups]
 dev = [

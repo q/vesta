@@ -159,48 +159,70 @@ The harder and more useful part is:
 
 This project is mainly about that rendering layer.
 
+## Installation
+
+```bash
+pip install vesta
+```
+
+Or run from source with [uv](https://github.com/astral-sh/uv):
+
+```bash
+uv run vesta.py render
+```
+
 ## Example usage
 
 Render text:
 
 ```bash
-echo '"hello world"' | python vesta.py render
+echo '"hello world"' | vesta render
 ```
 
 Render a key/value dict:
 
 ```bash
-echo '{"temp": "72F", "wind": "12mph"}' | python vesta.py render --template kv
+echo '{"temp": "72F", "wind": "12mph"}' | vesta render --template kv
 ```
 
-Render a metrics payload with tone indicators:
+Render a metrics payload with suffix formatting and color indicators:
 
 ```bash
-cat metrics.json | python vesta.py render --template metrics
+echo '{
+  "revenue_curr": 84210.50,
+  "sessions": 10823,
+  "conversion_pct": 3.2,
+  "bounce_rate_pct": 68.4,
+  "_style": {
+    "revenue_curr": "good",
+    "conversion_pct": {"good": 8, "bad": 2},
+    "bounce_rate_pct": {"good": 30, "bad": 80}
+  }
+}' | vesta render --template metrics --valign center --align center --timestamp --preview-only --explain
 ```
 
 Preview only (no character output):
 
 ```bash
-cat data.json | python vesta.py render --preview-only
+cat data.json | vesta render --preview-only
 ```
 
 Get raw character codes for the Vestaboard API:
 
 ```bash
-cat data.json | python vesta.py render --json-only
+cat data.json | vesta render --json-only
 ```
 
 Publish via Cloud API:
 
 ```bash
-cat data.json | python vesta.py post-cloud --token $VESTABOARD_TOKEN
+cat data.json | vesta post-cloud --token $VESTABOARD_TOKEN
 ```
 
 Publish via Local API:
 
 ```bash
-cat data.json | python vesta.py post-local --api-key $VESTABOARD_LOCAL_API_KEY
+cat data.json | vesta post-local --api-key $VESTABOARD_LOCAL_API_KEY
 ```
 
 Preview what's currently on your board:

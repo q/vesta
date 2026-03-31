@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+__version__ = "0.1.0"
+
 import argparse
 import csv
 import io
@@ -1057,5 +1059,9 @@ def cli(argv: list[str] | None = None) -> int:
     return 1
 
 
-if __name__ == "__main__":
+def main() -> None:
     raise SystemExit(cli())
+
+
+if __name__ == "__main__":
+    main()
