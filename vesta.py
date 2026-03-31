@@ -255,8 +255,46 @@ def place_cell(grid: Grid, row_idx: int, col_idx: int, value: Cell) -> None:
 
 
 # -----------------------------------------------------------------------------
-# Encoding
+# Encoding / decoding
 # -----------------------------------------------------------------------------
+
+
+# Inverse of CHAR_TO_CODE. Code 62 always decodes to ° (degree symbol) —
+# the heart glyph on the Note is a display quirk, not a separate character.
+CODE_TO_CHAR: dict[int, str] = {v: k for k, v in CHAR_TO_CODE.items()}
+CODE_TO_CHAR[62] = "°"
+
+
+def from_characters(chars: list[list[int]], profile: BoardProfile) -> RenderedMessage:
+    """Reconstruct a RenderedMessage from a raw Vestaboard character code grid."""
+    # Code 62 hardware quirk: decode to the correct glyph for the profile.
+    code62 = "❤" if profile.name == "note" else "°"
+    grid: Grid = []
+    for row in chars:
+        grid_row: list[Cell] = []
+        for code in row:
+            if 63 <= code <= 71:
+                grid_row.append(Color(code))
+            elif code == 62:
+                grid_row.append(code62)
+            else:
+                grid_row.append(CODE_TO_CHAR.get(code, " "))
+        grid.append(grid_row)
+    return RenderedMessage(profile=profile, grid=grid)
+
+
+def is_raw_grid(payload: Any, profile: BoardProfile) -> bool:
+    """Return True if payload looks like a Vestaboard character code grid for this profile."""
+    return (
+        isinstance(payload, list)
+        and len(payload) == profile.rows
+        and all(
+            isinstance(row, list)
+            and len(row) == profile.cols
+            and all(isinstance(c, int) for c in row)
+            for row in payload
+        )
+    )
 
 
 def encode_cell(cell: Cell, profile: BoardProfile) -> int:
@@ -559,7 +597,7 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
 # a trailing color tile indicator based on semantic tone. Useful for dashboards
 # where some fields (e.g. percent changes) have a natural positive/negative meaning.
 # Use _style overrides in the input dict to assign tones explicitly per field.
-def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None) -> RenderedMessage:
+def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None, valign: str = "top") -> RenderedMessage:
     entries = []
     for key, value in data.items():
         if key.startswith("_"):
@@ -573,13 +611,18 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
             }
         )
 
+    title_rows = 1 if title else 0
+    n_entries = min(len(entries), profile.rows - title_rows)
+    used_rows = title_rows + n_entries
+    top = (profile.rows - used_rows) // 2 if valign == "center" else 0
+
     grid = blank_grid(profile)
-    row = 0
+    row = top
     if title:
         place_line(grid, row, title, align="center")
         row += 1
 
-    for entry in entries[: max(0, profile.rows - row)]:
+    for entry in entries[:n_entries]:
         color = tone_to_color(entry["tone"])
 
         # Reserve the last two columns for a trailing color indicator tile.
@@ -709,6 +752,39 @@ def post_local(
 
 
 # -----------------------------------------------------------------------------
+# Timestamp
+# -----------------------------------------------------------------------------
+
+
+def compact_time(dt: datetime) -> str:
+    """Format a datetime as a short 12h time string: 10:01A, 9:30P.
+    NOTE: 24h locale support is not yet handled — always uses 12h with A/P suffix."""
+    suffix = "A" if dt.hour < 12 else "P"
+    hour = dt.hour % 12 or 12
+    return f"{hour}:{dt.minute:02d}{suffix}"
+
+
+def place_timestamp(message: RenderedMessage, tz: str | None = None, force: bool = False) -> RenderedMessage:
+    """Place the current time in the bottom-right of the grid if there is room.
+    Requires the timestamp width plus a 2-cell buffer to be blank at the right
+    of the last row. Silently skipped if there isn't room, unless force=True.
+    tz accepts IANA timezone strings (e.g. 'America/New_York'); defaults to local time."""
+    if tz:
+        from zoneinfo import ZoneInfo
+        now = datetime.now(ZoneInfo(tz))
+    else:
+        now = datetime.now()
+
+    ts = compact_time(now)
+    last_row = message.grid[-1]
+    buffer = 2
+    has_room = all(cell == " " for cell in last_row[-(len(ts) + buffer):])
+    if has_room or force:
+        place_line(message.grid, message.profile.rows - 1, ts, align="right")
+    return message
+
+
+# -----------------------------------------------------------------------------
 # Debug / explain
 # NOTE: Experimental — tied to the experimental tone/color system.
 # -----------------------------------------------------------------------------
@@ -778,7 +854,9 @@ def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: boo
 # -----------------------------------------------------------------------------
 
 
-def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None) -> RenderedMessage:
+def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top") -> RenderedMessage:
+    if is_raw_grid(payload, profile):
+        return from_characters(payload, profile)
     if template == "text":
         return render_text(profile, str(payload))
     if template == "kv":
@@ -792,7 +870,7 @@ def build_message(profile: BoardProfile, template: str, payload: Any, title: str
     if template == "metrics":
         if not isinstance(payload, dict):
             raise SystemExit("template=metrics requires a JSON object")
-        return render_metrics(profile, payload, title=title)
+        return render_metrics(profile, payload, title=title, valign=valign)
     if template == "auto":
         return render_auto(profile, payload, title=title)
     raise SystemExit(f"unknown template: {template}")
@@ -811,6 +889,10 @@ def cli(argv: list[str] | None = None) -> int:
         p.add_argument("--title")
         p.add_argument("--input", default="-", help="Path to input file, or - for stdin")
         p.add_argument("--no-preview", action="store_true")
+        p.add_argument("--valign", choices=["top", "center"], default="top", help="Vertical alignment of content block")
+        p.add_argument("--timestamp", action="store_true", help="Add current time to bottom-right if space allows")
+        p.add_argument("--force-timestamp", action="store_true", help="Add current time to bottom-right, overwriting if needed")
+        p.add_argument("--tz", default=None, help="Timezone for timestamp, e.g. America/New_York (default: local)")
 
     render_p = sub.add_parser("render", help="Render and preview without posting")
     add_common(render_p)
@@ -833,7 +915,10 @@ def cli(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     profile = PROFILES[args.profile]
     payload = load_payload(args.input)
-    message = build_message(profile, args.template, payload, args.title)
+    message = build_message(profile, args.template, payload, args.title, valign=args.valign)
+
+    if getattr(args, "force_timestamp", False) or getattr(args, "timestamp", False):
+        message = place_timestamp(message, tz=args.tz, force=getattr(args, "force_timestamp", False))
 
     show_preview = not args.no_preview
     if args.command == "render" and args.json_only:

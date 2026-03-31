@@ -79,6 +79,33 @@ indicators, why, and what thresholds trigger each zone:
 cat metrics.json | python vesta.py render --template metrics --preview-only --explain
 ```
 
+## Layout flags
+
+**`--valign [top|center]`** — vertical alignment of the content block.
+Default is `top`. Use `center` when you have fewer rows of data than the
+board height and want breathing room above and below.
+
+**`--timestamp`** — adds the current time (`10:01A`, `9:30P`) to the
+bottom-right corner. Requires the timestamp width plus a 2-cell buffer to
+be blank at the right of the last row — silently skipped if there isn't room.
+Use **`--force-timestamp`** to place it regardless.
+
+**`--tz`** — IANA timezone for the timestamp, e.g. `America/New_York`.
+Defaults to local system time. 24h locale support is not yet handled.
+
+```bash
+cat metrics.json | python vesta.py render --template metrics \
+  --valign center --timestamp --preview-only
+```
+
+**Preview a saved board** — if the input is a raw character code grid (the
+JSON output from `--json-only`), vesta decodes and previews it directly:
+
+```bash
+cat testdata/metrics_styled.json | python vesta.py render --template metrics --json-only > saved.json
+cat saved.json | python vesta.py render --preview-only
+```
+
 ## Why this exists
 
 Hitting the Vestaboard API directly is easy.

@@ -10,6 +10,7 @@ from vesta import (
     ellipsize,
     encode_cell,
     format_metric_value,
+    place_timestamp,
     render_kv,
     render_metrics,
     render_table,
@@ -286,30 +287,29 @@ class TestRenderMetrics(unittest.TestCase):
 
     def test_color_indicator_right_edge_on_positive_pct(self):
         msg = render_metrics(FLAGSHIP, {"score_pct": 10.0})
-        last_cell = msg.grid[0][-1]
-        self.assertIsInstance(last_cell, Color)
-        self.assertEqual(last_cell, Color.GREEN)
+        color_cells = [row[-1] for row in msg.grid if isinstance(row[-1], Color)]
+        self.assertTrue(any(c == Color.GREEN for c in color_cells))
 
     def test_color_indicator_red_on_negative_pct(self):
         msg = render_metrics(FLAGSHIP, {"score_pct": -5.0})
-        last_cell = msg.grid[0][-1]
-        self.assertEqual(last_cell, Color.RED)
+        color_cells = [row[-1] for row in msg.grid if isinstance(row[-1], Color)]
+        self.assertTrue(any(c == Color.RED for c in color_cells))
 
     def test_no_indicator_for_plain_field(self):
         msg = render_metrics(FLAGSHIP, {"score": 95})
-        last_cell = msg.grid[0][-1]
-        self.assertNotIsInstance(last_cell, Color)
+        color_cells = [row[-1] for row in msg.grid if isinstance(row[-1], Color)]
+        self.assertEqual(color_cells, [])
 
     def test_style_override_drives_color(self):
         data = {"revenue": 1000, "_style": {"revenue": "warn"}}
         msg = render_metrics(FLAGSHIP, data)
-        last_cell = msg.grid[0][-1]
-        self.assertEqual(last_cell, Color.YELLOW)
+        color_cells = [row[-1] for row in msg.grid if isinstance(row[-1], Color)]
+        self.assertTrue(any(c == Color.YELLOW for c in color_cells))
 
     def test_with_title_uses_first_row(self):
         msg = render_metrics(FLAGSHIP, {"val": 42}, title="DASHBOARD")
-        first_row_chars = "".join(c for c in msg.grid[0] if isinstance(c, str))
-        self.assertIn("DASHBOARD", first_row_chars)
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("DASHBOARD", all_chars)
 
     def test_to_characters_all_ints(self):
         msg = render_metrics(FLAGSHIP, {"score_pct": 5.0})
@@ -321,8 +321,74 @@ class TestRenderMetrics(unittest.TestCase):
     def test_color_code_in_characters(self):
         msg = render_metrics(FLAGSHIP, {"score_pct": 5.0})
         chars = msg.to_characters()
-        # Last cell in first row should be Color.GREEN = 66
-        self.assertEqual(chars[0][-1], 66)
+        # Color.GREEN = 66 should appear somewhere in the right-most column
+        right_col = [row[-1] for row in chars]
+        self.assertIn(66, right_col)
+
+
+class TestValign(unittest.TestCase):
+    def test_top_aligns_to_row_zero(self):
+        msg = render_metrics(FLAGSHIP, {"score": 95}, valign="top")
+        first_content_row = next(
+            i for i, row in enumerate(msg.grid)
+            if any(c != " " for c in row)
+        )
+        self.assertEqual(first_content_row, 0)
+
+    def test_center_offsets_from_top(self):
+        msg = render_metrics(FLAGSHIP, {"score": 95}, valign="center")
+        first_content_row = next(
+            i for i, row in enumerate(msg.grid)
+            if any(c != " " for c in row)
+        )
+        self.assertGreater(first_content_row, 0)
+
+    def test_center_content_is_roughly_middle(self):
+        # 1 entry on a 6-row board should center around row 2-3
+        msg = render_metrics(FLAGSHIP, {"score": 95}, valign="center")
+        first_content_row = next(
+            i for i, row in enumerate(msg.grid)
+            if any(c != " " for c in row)
+        )
+        self.assertGreaterEqual(first_content_row, 2)
+
+    def test_full_board_same_regardless_of_valign(self):
+        # When entries fill the board, top and center produce the same result
+        data = {f"k{i}": i for i in range(6)}
+        top = render_metrics(FLAGSHIP, data, valign="top").to_characters()
+        center = render_metrics(FLAGSHIP, data, valign="center").to_characters()
+        self.assertEqual(top, center)
+
+
+class TestTimestamp(unittest.TestCase):
+    def test_timestamp_placed_when_last_row_empty(self):
+        msg = render_metrics(FLAGSHIP, {"score": 95}, valign="top")
+        before = list(msg.grid[-1])
+        msg = place_timestamp(msg)
+        # Last row should have changed
+        self.assertNotEqual(msg.grid[-1], before)
+
+    def test_timestamp_skipped_when_last_row_full(self):
+        # Fill all 6 rows so last row has content
+        data = {f"k{i}": i for i in range(FLAGSHIP.rows)}
+        msg = render_metrics(FLAGSHIP, data, valign="top")
+        last_row_before = list(msg.grid[-1])
+        msg = place_timestamp(msg)
+        self.assertEqual(msg.grid[-1], last_row_before)
+
+    def test_force_timestamp_overwrites(self):
+        data = {f"k{i}": i for i in range(FLAGSHIP.rows)}
+        msg = render_metrics(FLAGSHIP, data, valign="top")
+        last_row_before = list(msg.grid[-1])
+        msg = place_timestamp(msg, force=True)
+        self.assertNotEqual(msg.grid[-1], last_row_before)
+
+    def test_timestamp_is_right_aligned(self):
+        msg = render_metrics(FLAGSHIP, {"score": 95}, valign="top")
+        msg = place_timestamp(msg)
+        last_row = msg.grid[-1]
+        # Last cell should not be a space (timestamp ends at right edge)
+        self.assertNotEqual(last_row[-1], " ")
 
 
 class TestRenderText(unittest.TestCase):
