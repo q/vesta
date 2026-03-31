@@ -162,6 +162,16 @@ Publish via Local API:
 cat data.json | python vesta.py post-local --api-key $VESTABOARD_LOCAL_API_KEY
 ```
 
+Preview what's currently on your board:
+
+```bash
+python vesta.py read-cloud
+```
+
+Uses `VESTABOARD_TOKEN` from the environment. Board profile (flagship vs note) is
+auto-detected from the grid dimensions returned by the API. Pass `--profile` to
+override if needed.
+
 Use the Note profile:
 
 ```bash

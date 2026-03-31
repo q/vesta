@@ -698,6 +698,29 @@ def load_payload(path: str | None) -> Any:
 # -----------------------------------------------------------------------------
 
 
+def _detect_profile(chars: list[list[int]]) -> BoardProfile:
+    """Infer board profile from grid dimensions. Falls back to flagship if unknown."""
+    rows, cols = len(chars), len(chars[0]) if chars else 0
+    for profile in PROFILES.values():
+        if profile.rows == rows and profile.cols == cols:
+            return profile
+    return FLAGSHIP
+
+
+def read_cloud(token: str, profile: BoardProfile | None = None, timeout: int = 10) -> RenderedMessage:
+    """Fetch the current board state from the Vestaboard Cloud RW API."""
+    r = requests.get(
+        "https://rw.vestaboard.com/",
+        headers={"X-Vestaboard-Read-Write-Key": token},
+        timeout=timeout,
+    )
+    r.raise_for_status()
+    data = r.json()
+    # layout is a JSON-encoded string (not a parsed array), so double-parse.
+    chars = json.loads(data["currentMessage"]["layout"])
+    return from_characters(chars, profile or _detect_profile(chars))
+
+
 def post_cloud(token: str, message: RenderedMessage, timeout: int = 10) -> dict[str, Any]:
     payload = {"characters": message.to_characters()}
     r = requests.post(
@@ -912,7 +935,27 @@ def cli(argv: list[str] | None = None) -> int:
     local_p.add_argument("--step-interval-ms", type=int)
     local_p.add_argument("--step-size", type=int)
 
+    read_cloud_p = sub.add_parser("read-cloud", help="Preview current board state from Cloud RW API")
+    read_cloud_p.add_argument("--token", default=os.getenv("VESTABOARD_TOKEN"))
+    read_cloud_p.add_argument("--profile", choices=sorted(PROFILES), default=None, help="Override profile (auto-detected from grid dimensions if omitted)")
+    read_cloud_p.add_argument("--visible-spaces", action="store_true")
+    read_cloud_p.add_argument("--cell-width", type=int, default=2)
+    read_cloud_p.add_argument("--no-ansi", action="store_true")
+
     args = parser.parse_args(argv)
+
+    if args.command == "read-cloud":
+        if not args.token:
+            raise SystemExit("missing --token or VESTABOARD_TOKEN")
+        profile = PROFILES[args.profile] if args.profile else None
+        message = read_cloud(args.token, profile)
+        print(message.preview(
+            visible_spaces=args.visible_spaces,
+            cell_width=args.cell_width,
+            ansi_color=not args.no_ansi,
+        ))
+        return 0
+
     profile = PROFILES[args.profile]
     payload = load_payload(args.input)
     message = build_message(profile, args.template, payload, args.title, valign=args.valign)
