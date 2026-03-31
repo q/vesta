@@ -8,15 +8,9 @@ import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import requests
-
-try:
-    import yaml
-except ImportError:
-    yaml = None
 
 
 # -----------------------------------------------------------------------------
@@ -75,11 +69,12 @@ CHAR_TO_CODE.update(
         "/": 59,
         "?": 60,
         "°": 62,
-        "❤": 62,
-        "…": 0,
+        "❤": 62
     }
 )
 
+# NOTE: Experimental token cells. We are trying this as an internal rendering detail,
+# not as a public mini-language we expect callers to author directly.
 TOKEN_TO_CODE = {
     "<RED>": 63,
     "<ORANGE>": 64,
@@ -90,6 +85,38 @@ TOKEN_TO_CODE = {
     "<WHITE>": 69,
     "<BLACK>": 70,
     "<FILLED>": 71,
+}
+
+# NOTE: Experimental ANSI preview colors. This is only for terminal preview and may
+# not stick around in this exact form.
+TOKEN_TO_ANSI = {
+    "<RED>": "\033[31m",
+    "<ORANGE>": "\033[38;5;208m",
+    "<YELLOW>": "\033[33m",
+    "<GREEN>": "\033[32m",
+    "<BLUE>": "\033[34m",
+    "<VIOLET>": "\033[35m",
+    "<WHITE>": "\033[37m",
+    "<BLACK>": "\033[90m",
+    "<FILLED>": "\033[97m",
+}
+ANSI_RESET = "\033[0m"
+
+TONE_TO_TOKEN = {
+    "good": "<GREEN>",
+    "bad": "<RED>",
+    "warn": "<YELLOW>",
+    "info": "<BLUE>",
+    "neutral": "<WHITE>",
+    "muted": "<BLACK>",
+    "green": "<GREEN>",
+    "red": "<RED>",
+    "yellow": "<YELLOW>",
+    "blue": "<BLUE>",
+    "white": "<WHITE>",
+    "black": "<BLACK>",
+    "violet": "<VIOLET>",
+    "orange": "<ORANGE>",
 }
 
 
@@ -109,10 +136,15 @@ class RenderedMessage:
     def to_characters(self) -> list[list[int]]:
         return [[encode_cell(cell, self.profile) for cell in row] for row in self.grid]
 
-    def preview(self, visible_spaces: bool = True, cell_width: int = 2) -> str:
+    def preview(self, visible_spaces: bool = True, cell_width: int = 2, ansi_color: bool = True) -> str:
         cell_width = max(1, cell_width)
 
         def show(cell: str) -> str:
+            if cell in TOKEN_TO_CODE:
+                block = "█" * cell_width
+                if ansi_color and cell in TOKEN_TO_ANSI:
+                    return f"{TOKEN_TO_ANSI[cell]}{block}{ANSI_RESET}"
+                return block
             if len(cell) != 1:
                 ch = "?"
             elif cell == " ":
@@ -141,10 +173,8 @@ def blank_grid(profile: BoardProfile, fill: str = " ") -> list[list[str]]:
     return [[fill for _ in range(profile.cols)] for _ in range(profile.rows)]
 
 
-
 def normalize_text(text: str) -> str:
     return text.upper().replace("\t", " ")
-
 
 
 def ellipsize(text: str, width: int) -> str:
@@ -153,17 +183,13 @@ def ellipsize(text: str, width: int) -> str:
         return text
     if width <= 1:
         return text[:width]
-    if width == 2:
-        return text[:2]
-    return text[: max(0, width - 1)] + "…"
-
+    return text[: max(0, width - 1)] + "."
 
 
 def wrap_text(text: str, width: int, max_lines: int) -> list[str]:
     words = normalize_text(text).split()
     if not words:
         return [""]
-
     lines: list[str] = []
     current = ""
     for word in words:
@@ -180,37 +206,40 @@ def wrap_text(text: str, width: int, max_lines: int) -> list[str]:
                 current = word
         if len(lines) >= max_lines:
             break
-
     if current and len(lines) < max_lines:
         lines.append(current)
-
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
     if words and len(lines) == max_lines:
         consumed = sum(len(line.split()) for line in lines)
         if consumed < len(words):
             lines[-1] = ellipsize(lines[-1], width)
-
     return [line.ljust(width)[:width] for line in lines]
 
 
-
-def place_line(grid: list[list[str]], row_idx: int, text: str, align: str = "left") -> None:
-    width = len(grid[row_idx])
-    text = ellipsize(text, width)
+def place_line(grid: list[list[str]], row_idx: int, text: str, align: str = "left", start_col: int = 0) -> None:
+    available_width = len(grid[row_idx]) - start_col
+    if available_width <= 0:
+        return
+    text = ellipsize(text, available_width)
     if align == "center":
-        start = max(0, (width - len(text)) // 2)
+        start = start_col + max(0, (available_width - len(text)) // 2)
     elif align == "right":
-        start = max(0, width - len(text))
+        start = start_col + max(0, available_width - len(text))
     else:
-        start = 0
-
-    for i, ch in enumerate(text[:width]):
+        start = start_col
+    for i, ch in enumerate(text[:available_width]):
         grid[row_idx][start + i] = ch
+
+
+def place_cell(grid: list[list[str]], row_idx: int, col_idx: int, value: str) -> None:
+    if 0 <= row_idx < len(grid) and 0 <= col_idx < len(grid[row_idx]):
+        grid[row_idx][col_idx] = value
 
 
 # -----------------------------------------------------------------------------
 # Renderers
 # -----------------------------------------------------------------------------
-
 
 
 def render_text(profile: BoardProfile, text: str, align: str = "center") -> RenderedMessage:
@@ -222,11 +251,9 @@ def render_text(profile: BoardProfile, text: str, align: str = "center") -> Rend
     return RenderedMessage(profile=profile, grid=grid)
 
 
-
 def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = None) -> RenderedMessage:
     grid = blank_grid(profile)
     row = 0
-
     if title:
         place_line(grid, row, title, align="center")
         row += 1
@@ -239,7 +266,6 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
             break
         key_s = normalize_text(str(key)).replace("_", " ")
         value_s = normalize_text(format_scalar(value))
-
         if profile.cols >= 18:
             left_width = min(max(len(key_s), 6), profile.cols // 2)
             right_width = profile.cols - left_width - 1
@@ -247,7 +273,8 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
             right = ellipsize(value_s, right_width).rjust(right_width)
             place_line(grid, row, f"{left} {right}", align="left")
         else:
-            place_line(grid, row, ellipsize(key_s, profile.cols), align="left")
+            line = f"{ellipsize(key_s, profile.cols - 1)}"
+            place_line(grid, row, line, align="left")
             row += 1
             if row >= profile.rows:
                 break
@@ -255,7 +282,6 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
         row += 1
 
     return RenderedMessage(profile=profile, grid=grid)
-
 
 
 def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None) -> RenderedMessage:
@@ -272,13 +298,10 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
         return RenderedMessage(profile=profile, grid=grid)
 
     columns = list(rows[0].keys())[:3]
-    visible_rows = rows[: max(0, profile.rows - row_idx - 1)]
+    visible_rows = rows[: max(0, profile.rows - row_idx)]
 
     widths = infer_widths(columns, visible_rows, profile.cols)
-    header = " ".join(
-        ellipsize(col.replace("_", " ").upper(), widths[col]).ljust(widths[col])
-        for col in columns
-    )
+    header = " ".join(ellipsize(col.replace("_", " ").upper(), widths[col]).ljust(widths[col]) for col in columns)
     if row_idx < profile.rows:
         place_line(grid, row_idx, header, align="left")
         row_idx += 1
@@ -298,7 +321,9 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
     return RenderedMessage(profile=profile, grid=grid)
 
 
-
+# NOTE: Experimental style metadata and row indicators. We are trying a semantic
+# approach to color support here, but it is still very possible we simplify or
+# remove this later.
 def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None) -> RenderedMessage:
     aliases = [
         (("rpm", "revenue_per_min", "revenue_per_minute"), "RPM", "number"),
@@ -308,20 +333,35 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
         (("updated", "upd", "timestamp", "ts"), "UPD", "datetime"),
     ]
 
-    ordered: list[tuple[str, str]] = []
+    ordered: list[dict[str, Any]] = []
     used_keys: set[str] = set()
 
     for keys, label, kind in aliases:
         for key in keys:
             if key in data:
-                ordered.append((label, format_metric_value(data[key], kind, profile)))
+                value = data[key]
+                ordered.append(
+                    {
+                        "key": key,
+                        "label": label,
+                        "value": format_metric_value(value, kind, profile),
+                        "tone": resolve_metric_tone(data, key, value),
+                    }
+                )
                 used_keys.add(key)
                 break
 
     for key, value in data.items():
-        if key in used_keys:
+        if key in used_keys or key.startswith("_"):
             continue
-        ordered.append((prettify_metric_label(key), format_metric_value(value, "auto", profile)))
+        ordered.append(
+            {
+                "key": key,
+                "label": prettify_metric_label(key),
+                "value": format_metric_value(value, "auto", profile),
+                "tone": resolve_metric_tone(data, key, value),
+            }
+        )
 
     grid = blank_grid(profile)
     row = 0
@@ -329,12 +369,21 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
         place_line(grid, row, title, align="center")
         row += 1
 
-    for label, value in ordered[: max(0, profile.rows - row)]:
-        left_width = max(4, min(len(label), profile.cols // 2))
-        right_width = profile.cols - left_width - 1
-        left = ellipsize(label, left_width).ljust(left_width)
-        right = ellipsize(value, right_width).rjust(right_width)
+    for entry in ordered[: max(0, profile.rows - row)]:
+        token = tone_to_token(entry["tone"])
+
+        # NOTE: Experimental indicator placement. We are trying the color cell as a
+        # trailing badge beside the value instead of a leading marker on the left.
+        reserve_cols = 2 if token and profile.cols >= 12 else 0
+        available_width = profile.cols - reserve_cols
+        left_width = max(4, min(len(entry["label"]), max(4, available_width // 2)))
+        right_width = max(1, available_width - left_width - 1)
+        left = ellipsize(entry["label"], left_width).ljust(left_width)
+        right = ellipsize(entry["value"], right_width).rjust(right_width)
         place_line(grid, row, f"{left} {right}", align="left")
+
+        if token and profile.cols >= 12:
+            place_cell(grid, row, profile.cols - 1, token)
         row += 1
         if row >= profile.rows:
             break
@@ -342,11 +391,9 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
     return RenderedMessage(profile=profile, grid=grid)
 
 
-
 def render_auto(profile: BoardProfile, payload: Any, title: str | None = None) -> RenderedMessage:
     if isinstance(payload, str):
         return render_text(profile, payload)
-
     if isinstance(payload, dict):
         metric_keys = {
             "rpm",
@@ -366,10 +413,8 @@ def render_auto(profile: BoardProfile, payload: Any, title: str | None = None) -
         if any(key in payload for key in metric_keys):
             return render_metrics(profile, payload, title=title)
         return render_kv(profile, payload, title=title)
-
     if isinstance(payload, list) and payload and all(isinstance(x, dict) for x in payload):
         return render_table(profile, payload, title=title)
-
     return render_text(profile, json.dumps(payload, separators=(",", ":")), align="left")
 
 
@@ -378,21 +423,18 @@ def render_auto(profile: BoardProfile, payload: Any, title: str | None = None) -
 # -----------------------------------------------------------------------------
 
 
-
 def format_scalar(value: Any) -> str:
     if isinstance(value, float):
         if abs(value) >= 1_000_000:
-            return f"{value / 1_000_000:.2f}".rstrip("0").rstrip(".") + "M"
+            return f"{value / 1_000_000:.2f}M"
         if abs(value) >= 1_000:
-            return f"{value / 1_000:.1f}".rstrip("0").rstrip(".") + "K"
+            return f"{value / 1_000:.1f}K"
         return f"{value:.2f}".rstrip("0").rstrip(".")
     return str(value)
 
 
-
 def prettify_metric_label(key: str) -> str:
     return normalize_text(key).replace("_", " ")
-
 
 
 def compact_number(value: float, decimals: int = 2) -> str:
@@ -404,7 +446,6 @@ def compact_number(value: float, decimals: int = 2) -> str:
     if abs_value >= 1_000:
         return f"{value / 1_000:.1f}".rstrip("0").rstrip(".") + "K"
     return f"{value:.2f}".rstrip("0").rstrip(".")
-
 
 
 def try_parse_datetime(value: Any) -> datetime | None:
@@ -446,7 +487,6 @@ def try_parse_datetime(value: Any) -> datetime | None:
     return None
 
 
-
 def compact_datetime(value: Any, profile: BoardProfile) -> str:
     dt = try_parse_datetime(value)
     if dt is None:
@@ -464,7 +504,6 @@ def compact_datetime(value: Any, profile: BoardProfile) -> str:
     return f"{month}/{day} {hour_12}:{minute:02d}{suffix}"
 
 
-
 def format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
     if kind == "datetime":
         return compact_datetime(value, profile)
@@ -476,7 +515,7 @@ def format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
         if kind == "percent":
             return f"{n:.2f}".rstrip("0").rstrip(".")
         if kind == "number":
-            return compact_number(n, decimals=2 if abs(n) < 100 else 1)
+            return compact_number(n if abs(n) >= 1000 else n, decimals=2 if abs(n) < 100 else 1)
         if kind == "auto":
             return compact_number(n)
 
@@ -486,7 +525,6 @@ def format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
             return compact_datetime(parsed_dt, profile)
 
     return normalize_text(format_scalar(value))
-
 
 
 def infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: int) -> dict[str, int]:
@@ -520,10 +558,41 @@ def infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: in
     return base
 
 
+# NOTE: Experimental tone resolution. We may decide later this is too much logic
+# for the renderer, but it is useful for quickly testing semantic color support.
+def resolve_metric_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
+    style = data.get("_style")
+    if isinstance(style, dict) and key in style:
+        override = style[key]
+        if isinstance(override, str):
+            return override.lower()
+        if isinstance(override, dict):
+            tone = override.get("tone")
+            if isinstance(tone, str):
+                return tone.lower()
+
+    if isinstance(value, (int, float)):
+        lower_key = key.lower()
+        if any(part in lower_key for part in ["pct", "percent", "yoy", "change"]):
+            n = float(value)
+            if n > 0:
+                return "good"
+            if n < 0:
+                return "bad"
+            return "neutral"
+
+    return None
+
+
+def tone_to_token(tone: str | None) -> str | None:
+    if not tone:
+        return None
+    return TONE_TO_TOKEN.get(tone.lower())
+
+
 # -----------------------------------------------------------------------------
 # Encoding
 # -----------------------------------------------------------------------------
-
 
 
 def encode_cell(cell: str, profile: BoardProfile) -> int:
@@ -543,14 +612,12 @@ def encode_cell(cell: str, profile: BoardProfile) -> int:
 # -----------------------------------------------------------------------------
 
 
-
 def load_payload(path: str | None) -> Any:
     if path and path != "-":
         with open(path, "r", encoding="utf-8") as f:
             raw = f.read()
     else:
         raw = sys.stdin.read()
-
     raw = raw.strip()
     if not raw:
         return ""
@@ -572,9 +639,8 @@ def load_payload(path: str | None) -> Any:
 
 
 # -----------------------------------------------------------------------------
-# Publishers and target config
+# Publishers
 # -----------------------------------------------------------------------------
-
 
 
 def post_cloud(token: str, message: RenderedMessage, timeout: int = 10) -> dict[str, Any]:
@@ -596,35 +662,6 @@ def post_cloud(token: str, message: RenderedMessage, timeout: int = 10) -> dict[
 
 
 
-def load_devices_config(path: str) -> dict[str, Any]:
-    config_path = Path(path)
-    if not config_path.exists():
-        raise SystemExit(f"devices file not found: {path}")
-    if yaml is None:
-        raise SystemExit("PyYAML is required for devices.yaml support. Install with: pip install pyyaml")
-
-    with config_path.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-
-    devices = data.get("devices")
-    if not isinstance(devices, dict):
-        raise SystemExit("devices.yaml must contain a top-level 'devices:' mapping")
-    return devices
-
-
-
-def resolve_target(target: str, devices_file: str) -> dict[str, Any]:
-    devices = load_devices_config(devices_file)
-    if target not in devices:
-        available = ", ".join(sorted(devices)) or "none"
-        raise SystemExit(f"unknown target '{target}'. Available targets: {available}")
-    config = devices[target]
-    if not isinstance(config, dict):
-        raise SystemExit(f"target '{target}' must map to an object")
-    return config
-
-
-
 def post_local(
     api_key: str,
     message: RenderedMessage,
@@ -635,7 +672,7 @@ def post_local(
     timeout: int = 10,
 ) -> dict[str, Any]:
     payload: Any = message.to_characters()
-    if strategy or step_interval_ms is not None or step_size is not None:
+    if strategy or step_interval_ms or step_size:
         payload = {
             "characters": message.to_characters(),
         }
@@ -667,7 +704,6 @@ def post_local(
 # -----------------------------------------------------------------------------
 
 
-
 def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None) -> RenderedMessage:
     if template == "text":
         return render_text(profile, str(payload))
@@ -694,10 +730,11 @@ def cli(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_common(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--profile", choices=sorted(PROFILES), default=None)
+        p.add_argument("--profile", choices=sorted(PROFILES), default="flagship")
         p.add_argument("--template", choices=["auto", "text", "kv", "table", "metrics"], default="auto")
         p.add_argument("--visible-spaces", action="store_true", help="Show spaces as · in terminal preview")
         p.add_argument("--cell-width", type=int, default=2, help="Terminal preview width per board cell")
+        p.add_argument("--no-ansi", action="store_true", help="Disable ANSI color in terminal preview")
         p.add_argument("--title")
         p.add_argument("--input", default="-", help="Path to input file, or - for stdin")
         p.add_argument("--no-preview", action="store_true")
@@ -719,30 +756,17 @@ def cli(argv: list[str] | None = None) -> int:
     local_p.add_argument("--step-interval-ms", type=int)
     local_p.add_argument("--step-size", type=int)
 
-    post_p = sub.add_parser("post", help="Render and send via a named target from devices.yaml")
-    add_common(post_p)
-    post_p.add_argument("--target", required=True)
-    post_p.add_argument("--devices-file", default=os.getenv("VESTA_DEVICES_FILE", "devices.yaml"))
-
     args = parser.parse_args(argv)
-
-    target_config: dict[str, Any] | None = None
-    if args.command == "post":
-        target_config = resolve_target(args.target, args.devices_file)
-        profile_name = args.profile or target_config.get("profile") or "flagship"
-    else:
-        profile_name = args.profile or "flagship"
-
-    profile = PROFILES[profile_name]
+    profile = PROFILES[args.profile]
     payload = load_payload(args.input)
     message = build_message(profile, args.template, payload, args.title)
 
     show_preview = not args.no_preview
-    if args.command == "render" and getattr(args, "json_only", False):
+    if args.command == "render" and args.json_only:
         show_preview = False
 
     if show_preview:
-        print(message.preview(visible_spaces=args.visible_spaces, cell_width=args.cell_width))
+        print(message.preview(visible_spaces=args.visible_spaces, cell_width=args.cell_width, ansi_color=not args.no_ansi))
         print()
 
     if args.command == "render":
@@ -773,43 +797,6 @@ def cli(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(result, indent=2))
         return 0
-
-    if args.command == "post":
-        assert target_config is not None
-        kind = str(target_config.get("kind", "")).lower()
-
-        if kind == "cloud":
-            token = target_config.get("token")
-            token_env = target_config.get("token_env")
-            if not token and token_env:
-                token = os.getenv(str(token_env))
-            if not token:
-                raise SystemExit(f"target '{args.target}' is missing token or token_env")
-            result = post_cloud(str(token), message)
-            print(json.dumps(result, indent=2))
-            return 0
-
-        if kind == "local":
-            api_key = target_config.get("api_key")
-            api_key_env = target_config.get("api_key_env")
-            if not api_key and api_key_env:
-                api_key = os.getenv(str(api_key_env))
-            if not api_key:
-                raise SystemExit(f"target '{args.target}' is missing api_key or api_key_env")
-
-            host = str(target_config.get("host") or os.getenv("VESTABOARD_LOCAL_HOST", "http://vestaboard.local:7000"))
-            result = post_local(
-                api_key=str(api_key),
-                host=host,
-                message=message,
-                strategy=target_config.get("strategy"),
-                step_interval_ms=target_config.get("step_interval_ms"),
-                step_size=target_config.get("step_size"),
-            )
-            print(json.dumps(result, indent=2))
-            return 0
-
-        raise SystemExit(f"target '{args.target}' has unsupported kind '{kind}'. Use 'cloud' or 'local'.")
 
     return 1
 
