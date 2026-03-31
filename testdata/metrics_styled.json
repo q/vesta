@@ -1,0 +1,10 @@
+{
+  "revenue": 84210.50,
+  "sessions": 10823,
+  "conversion": 3.2,
+  "bounce_rate": 68.4,
+  "_style": {
+    "revenue": "good",
+    "bounce_rate": "bad"
+  }
+}

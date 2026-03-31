@@ -563,7 +563,7 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
 
         # Reserve the last two columns for a trailing color indicator tile.
         # NOTE: Experimental — indicator placement may change.
-        reserve_cols = 2 if color and profile.cols >= 12 else 0
+        reserve_cols = 1 if color and profile.cols >= 12 else 0
         available_width = profile.cols - reserve_cols
         # Give the label as much space as it needs; only reserve the minimum
         # required for the value so labels aren't truncated unnecessarily.

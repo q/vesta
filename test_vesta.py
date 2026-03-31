@@ -1,4 +1,4 @@
-"""Tests for vesta.py — run with: python -m pytest test_vesta.py -v"""
+"""Tests for vesta.py — run with: uv run pytest test_vesta.py -v"""
 import unittest
 
 from vesta import (
