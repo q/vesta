@@ -7,9 +7,16 @@ import json
 import os
 import sys
 from dataclasses import dataclass
-from typing import Any, Iterable
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 import requests
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 
 # -----------------------------------------------------------------------------
@@ -69,10 +76,10 @@ CHAR_TO_CODE.update(
         "?": 60,
         "°": 62,
         "❤": 62,
+        "…": 0,
     }
 )
 
-# Optional symbolic color tokens for templating / debugging.
 TOKEN_TO_CODE = {
     "<RED>": 63,
     "<ORANGE>": 64,
@@ -84,21 +91,6 @@ TOKEN_TO_CODE = {
     "<BLACK>": 70,
     "<FILLED>": 71,
 }
-
-CODE_TO_PREVIEW = {v: k for k, v in CHAR_TO_CODE.items()}
-CODE_TO_PREVIEW.update(
-    {
-        63: "●",
-        64: "●",
-        65: "●",
-        66: "●",
-        67: "●",
-        68: "●",
-        69: "○",
-        70: "●",
-        71: "■",
-    }
-)
 
 
 # -----------------------------------------------------------------------------
@@ -117,10 +109,22 @@ class RenderedMessage:
     def to_characters(self) -> list[list[int]]:
         return [[encode_cell(cell, self.profile) for cell in row] for row in self.grid]
 
-    def preview(self) -> str:
-        inner = ["│" + "".join(cell if len(cell) == 1 else "?" for cell in row) + "│" for row in self.grid]
-        top = "┌" + "─" * self.profile.cols + "┐"
-        bottom = "└" + "─" * self.profile.cols + "┘"
+    def preview(self, visible_spaces: bool = True, cell_width: int = 2) -> str:
+        cell_width = max(1, cell_width)
+
+        def show(cell: str) -> str:
+            if len(cell) != 1:
+                ch = "?"
+            elif cell == " ":
+                ch = "·" if visible_spaces else " "
+            else:
+                ch = cell
+            return ch.ljust(cell_width)
+
+        inner = ["│" + "".join(show(cell) for cell in row) + "│" for row in self.grid]
+        preview_cols = self.profile.cols * cell_width
+        top = "┌" + "─" * preview_cols + "┐"
+        bottom = "└" + "─" * preview_cols + "┘"
         label = f" {self.profile.name} {self.profile.rows}x{self.profile.cols} "
         if len(label) + 2 <= len(top):
             start = max(1, (len(top) - len(label)) // 2)
@@ -137,8 +141,10 @@ def blank_grid(profile: BoardProfile, fill: str = " ") -> list[list[str]]:
     return [[fill for _ in range(profile.cols)] for _ in range(profile.rows)]
 
 
+
 def normalize_text(text: str) -> str:
     return text.upper().replace("\t", " ")
+
 
 
 def ellipsize(text: str, width: int) -> str:
@@ -147,13 +153,17 @@ def ellipsize(text: str, width: int) -> str:
         return text
     if width <= 1:
         return text[:width]
+    if width == 2:
+        return text[:2]
     return text[: max(0, width - 1)] + "…"
+
 
 
 def wrap_text(text: str, width: int, max_lines: int) -> list[str]:
     words = normalize_text(text).split()
     if not words:
         return [""]
+
     lines: list[str] = []
     current = ""
     for word in words:
@@ -170,15 +180,17 @@ def wrap_text(text: str, width: int, max_lines: int) -> list[str]:
                 current = word
         if len(lines) >= max_lines:
             break
+
     if current and len(lines) < max_lines:
         lines.append(current)
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
+
     if words and len(lines) == max_lines:
         consumed = sum(len(line.split()) for line in lines)
         if consumed < len(words):
             lines[-1] = ellipsize(lines[-1], width)
+
     return [line.ljust(width)[:width] for line in lines]
+
 
 
 def place_line(grid: list[list[str]], row_idx: int, text: str, align: str = "left") -> None:
@@ -190,6 +202,7 @@ def place_line(grid: list[list[str]], row_idx: int, text: str, align: str = "lef
         start = max(0, width - len(text))
     else:
         start = 0
+
     for i, ch in enumerate(text[:width]):
         grid[row_idx][start + i] = ch
 
@@ -197,6 +210,7 @@ def place_line(grid: list[list[str]], row_idx: int, text: str, align: str = "lef
 # -----------------------------------------------------------------------------
 # Renderers
 # -----------------------------------------------------------------------------
+
 
 
 def render_text(profile: BoardProfile, text: str, align: str = "center") -> RenderedMessage:
@@ -208,9 +222,11 @@ def render_text(profile: BoardProfile, text: str, align: str = "center") -> Rend
     return RenderedMessage(profile=profile, grid=grid)
 
 
+
 def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = None) -> RenderedMessage:
     grid = blank_grid(profile)
     row = 0
+
     if title:
         place_line(grid, row, title, align="center")
         row += 1
@@ -223,6 +239,7 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
             break
         key_s = normalize_text(str(key)).replace("_", " ")
         value_s = normalize_text(format_scalar(value))
+
         if profile.cols >= 18:
             left_width = min(max(len(key_s), 6), profile.cols // 2)
             right_width = profile.cols - left_width - 1
@@ -230,8 +247,7 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
             right = ellipsize(value_s, right_width).rjust(right_width)
             place_line(grid, row, f"{left} {right}", align="left")
         else:
-            line = f"{ellipsize(key_s, profile.cols - 1)}"
-            place_line(grid, row, line, align="left")
+            place_line(grid, row, ellipsize(key_s, profile.cols), align="left")
             row += 1
             if row >= profile.rows:
                 break
@@ -239,6 +255,7 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
         row += 1
 
     return RenderedMessage(profile=profile, grid=grid)
+
 
 
 def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None) -> RenderedMessage:
@@ -255,10 +272,13 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
         return RenderedMessage(profile=profile, grid=grid)
 
     columns = list(rows[0].keys())[:3]
-    visible_rows = rows[: max(0, profile.rows - row_idx)]
+    visible_rows = rows[: max(0, profile.rows - row_idx - 1)]
 
     widths = infer_widths(columns, visible_rows, profile.cols)
-    header = " ".join(ellipsize(col.replace("_", " ").upper(), widths[col]).ljust(widths[col]) for col in columns)
+    header = " ".join(
+        ellipsize(col.replace("_", " ").upper(), widths[col]).ljust(widths[col])
+        for col in columns
+    )
     if row_idx < profile.rows:
         place_line(grid, row_idx, header, align="left")
         row_idx += 1
@@ -278,13 +298,78 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
     return RenderedMessage(profile=profile, grid=grid)
 
 
+
+def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None) -> RenderedMessage:
+    aliases = [
+        (("rpm", "revenue_per_min", "revenue_per_minute"), "RPM", "number"),
+        (("revenue_24h", "rev_24h", "revenue24h"), "REV 24H", "currency_short"),
+        (("week_yoy_pct", "week_yoy", "week_change_pct"), "WEEK YOY", "percent"),
+        (("month_yoy_pct", "month_yoy", "month_change_pct"), "MONTH YOY", "percent"),
+        (("updated", "upd", "timestamp", "ts"), "UPD", "datetime"),
+    ]
+
+    ordered: list[tuple[str, str]] = []
+    used_keys: set[str] = set()
+
+    for keys, label, kind in aliases:
+        for key in keys:
+            if key in data:
+                ordered.append((label, format_metric_value(data[key], kind, profile)))
+                used_keys.add(key)
+                break
+
+    for key, value in data.items():
+        if key in used_keys:
+            continue
+        ordered.append((prettify_metric_label(key), format_metric_value(value, "auto", profile)))
+
+    grid = blank_grid(profile)
+    row = 0
+    if title:
+        place_line(grid, row, title, align="center")
+        row += 1
+
+    for label, value in ordered[: max(0, profile.rows - row)]:
+        left_width = max(4, min(len(label), profile.cols // 2))
+        right_width = profile.cols - left_width - 1
+        left = ellipsize(label, left_width).ljust(left_width)
+        right = ellipsize(value, right_width).rjust(right_width)
+        place_line(grid, row, f"{left} {right}", align="left")
+        row += 1
+        if row >= profile.rows:
+            break
+
+    return RenderedMessage(profile=profile, grid=grid)
+
+
+
 def render_auto(profile: BoardProfile, payload: Any, title: str | None = None) -> RenderedMessage:
     if isinstance(payload, str):
         return render_text(profile, payload)
+
     if isinstance(payload, dict):
+        metric_keys = {
+            "rpm",
+            "revenue_per_min",
+            "revenue_per_minute",
+            "revenue_24h",
+            "rev_24h",
+            "week_yoy_pct",
+            "week_yoy",
+            "month_yoy_pct",
+            "month_yoy",
+            "updated",
+            "upd",
+            "timestamp",
+            "ts",
+        }
+        if any(key in payload for key in metric_keys):
+            return render_metrics(profile, payload, title=title)
         return render_kv(profile, payload, title=title)
+
     if isinstance(payload, list) and payload and all(isinstance(x, dict) for x in payload):
         return render_table(profile, payload, title=title)
+
     return render_text(profile, json.dumps(payload, separators=(",", ":")), align="left")
 
 
@@ -293,14 +378,115 @@ def render_auto(profile: BoardProfile, payload: Any, title: str | None = None) -
 # -----------------------------------------------------------------------------
 
 
+
 def format_scalar(value: Any) -> str:
     if isinstance(value, float):
         if abs(value) >= 1_000_000:
-            return f"{value / 1_000_000:.2f}M"
+            return f"{value / 1_000_000:.2f}".rstrip("0").rstrip(".") + "M"
         if abs(value) >= 1_000:
-            return f"{value / 1_000:.1f}K"
+            return f"{value / 1_000:.1f}".rstrip("0").rstrip(".") + "K"
         return f"{value:.2f}".rstrip("0").rstrip(".")
     return str(value)
+
+
+
+def prettify_metric_label(key: str) -> str:
+    return normalize_text(key).replace("_", " ")
+
+
+
+def compact_number(value: float, decimals: int = 2) -> str:
+    abs_value = abs(value)
+    if abs_value >= 1_000_000_000:
+        return f"{value / 1_000_000_000:.{decimals}f}".rstrip("0").rstrip(".") + "B"
+    if abs_value >= 1_000_000:
+        return f"{value / 1_000_000:.{decimals}f}".rstrip("0").rstrip(".") + "M"
+    if abs_value >= 1_000:
+        return f"{value / 1_000:.1f}".rstrip("0").rstrip(".") + "K"
+    return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+
+def try_parse_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    if not isinstance(value, str):
+        return None
+
+    raw = value.strip()
+    if not raw:
+        return None
+
+    candidates = [
+        raw,
+        raw.replace("Z", "+00:00"),
+        raw.replace(" ET", ""),
+        raw.replace(" UTC", ""),
+        raw.replace("T", " "),
+    ]
+    formats = [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+        "%m/%d/%Y %H:%M",
+        "%m/%d/%y %H:%M",
+        "%m/%d %H:%M",
+    ]
+
+    for candidate in candidates:
+        try:
+            return datetime.fromisoformat(candidate)
+        except ValueError:
+            pass
+        for fmt in formats:
+            try:
+                return datetime.strptime(candidate, fmt)
+            except ValueError:
+                continue
+    return None
+
+
+
+def compact_datetime(value: Any, profile: BoardProfile) -> str:
+    dt = try_parse_datetime(value)
+    if dt is None:
+        return ellipsize(normalize_text(str(value)), 10 if profile.cols <= 15 else 12)
+
+    month = dt.month
+    day = dt.day
+    hour_24 = dt.hour
+    minute = dt.minute
+    suffix = "A" if hour_24 < 12 else "P"
+    hour_12 = hour_24 % 12 or 12
+
+    if profile.cols <= 15:
+        return f"{hour_12}:{minute:02d}{suffix}"
+    return f"{month}/{day} {hour_12}:{minute:02d}{suffix}"
+
+
+
+def format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
+    if kind == "datetime":
+        return compact_datetime(value, profile)
+
+    if isinstance(value, (int, float)):
+        n = float(value)
+        if kind == "currency_short":
+            return compact_number(n)
+        if kind == "percent":
+            return f"{n:.2f}".rstrip("0").rstrip(".")
+        if kind == "number":
+            return compact_number(n, decimals=2 if abs(n) < 100 else 1)
+        if kind == "auto":
+            return compact_number(n)
+
+    if kind == "auto":
+        parsed_dt = try_parse_datetime(value)
+        if parsed_dt is not None:
+            return compact_datetime(parsed_dt, profile)
+
+    return normalize_text(format_scalar(value))
+
 
 
 def infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: int) -> dict[str, int]:
@@ -339,6 +525,7 @@ def infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: in
 # -----------------------------------------------------------------------------
 
 
+
 def encode_cell(cell: str, profile: BoardProfile) -> int:
     if cell in TOKEN_TO_CODE:
         return TOKEN_TO_CODE[cell]
@@ -356,12 +543,14 @@ def encode_cell(cell: str, profile: BoardProfile) -> int:
 # -----------------------------------------------------------------------------
 
 
+
 def load_payload(path: str | None) -> Any:
     if path and path != "-":
         with open(path, "r", encoding="utf-8") as f:
             raw = f.read()
     else:
         raw = sys.stdin.read()
+
     raw = raw.strip()
     if not raw:
         return ""
@@ -383,8 +572,9 @@ def load_payload(path: str | None) -> Any:
 
 
 # -----------------------------------------------------------------------------
-# Publishers
+# Publishers and target config
 # -----------------------------------------------------------------------------
+
 
 
 def post_cloud(token: str, message: RenderedMessage, timeout: int = 10) -> dict[str, Any]:
@@ -406,6 +596,35 @@ def post_cloud(token: str, message: RenderedMessage, timeout: int = 10) -> dict[
 
 
 
+def load_devices_config(path: str) -> dict[str, Any]:
+    config_path = Path(path)
+    if not config_path.exists():
+        raise SystemExit(f"devices file not found: {path}")
+    if yaml is None:
+        raise SystemExit("PyYAML is required for devices.yaml support. Install with: pip install pyyaml")
+
+    with config_path.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+
+    devices = data.get("devices")
+    if not isinstance(devices, dict):
+        raise SystemExit("devices.yaml must contain a top-level 'devices:' mapping")
+    return devices
+
+
+
+def resolve_target(target: str, devices_file: str) -> dict[str, Any]:
+    devices = load_devices_config(devices_file)
+    if target not in devices:
+        available = ", ".join(sorted(devices)) or "none"
+        raise SystemExit(f"unknown target '{target}'. Available targets: {available}")
+    config = devices[target]
+    if not isinstance(config, dict):
+        raise SystemExit(f"target '{target}' must map to an object")
+    return config
+
+
+
 def post_local(
     api_key: str,
     message: RenderedMessage,
@@ -416,7 +635,7 @@ def post_local(
     timeout: int = 10,
 ) -> dict[str, Any]:
     payload: Any = message.to_characters()
-    if strategy or step_interval_ms or step_size:
+    if strategy or step_interval_ms is not None or step_size is not None:
         payload = {
             "characters": message.to_characters(),
         }
@@ -448,6 +667,7 @@ def post_local(
 # -----------------------------------------------------------------------------
 
 
+
 def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None) -> RenderedMessage:
     if template == "text":
         return render_text(profile, str(payload))
@@ -459,6 +679,10 @@ def build_message(profile: BoardProfile, template: str, payload: Any, title: str
         if not (isinstance(payload, list) and all(isinstance(x, dict) for x in payload)):
             raise SystemExit("template=table requires CSV or a JSON array of objects")
         return render_table(profile, payload, title=title)
+    if template == "metrics":
+        if not isinstance(payload, dict):
+            raise SystemExit("template=metrics requires a JSON object")
+        return render_metrics(profile, payload, title=title)
     if template == "auto":
         return render_auto(profile, payload, title=title)
     raise SystemExit(f"unknown template: {template}")
@@ -470,14 +694,18 @@ def cli(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_common(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--profile", choices=sorted(PROFILES), default="flagship")
-        p.add_argument("--template", choices=["auto", "text", "kv", "table"], default="auto")
+        p.add_argument("--profile", choices=sorted(PROFILES), default=None)
+        p.add_argument("--template", choices=["auto", "text", "kv", "table", "metrics"], default="auto")
+        p.add_argument("--visible-spaces", action="store_true", help="Show spaces as · in terminal preview")
+        p.add_argument("--cell-width", type=int, default=2, help="Terminal preview width per board cell")
         p.add_argument("--title")
         p.add_argument("--input", default="-", help="Path to input file, or - for stdin")
         p.add_argument("--no-preview", action="store_true")
 
     render_p = sub.add_parser("render", help="Render and preview without posting")
     add_common(render_p)
+    render_p.add_argument("--preview-only", action="store_true", help="Print only the terminal preview")
+    render_p.add_argument("--json-only", action="store_true", help="Print only the raw character array JSON")
 
     cloud_p = sub.add_parser("post-cloud", help="Render and send via Cloud API")
     add_common(cloud_p)
@@ -491,16 +719,37 @@ def cli(argv: list[str] | None = None) -> int:
     local_p.add_argument("--step-interval-ms", type=int)
     local_p.add_argument("--step-size", type=int)
 
+    post_p = sub.add_parser("post", help="Render and send via a named target from devices.yaml")
+    add_common(post_p)
+    post_p.add_argument("--target", required=True)
+    post_p.add_argument("--devices-file", default=os.getenv("VESTA_DEVICES_FILE", "devices.yaml"))
+
     args = parser.parse_args(argv)
-    profile = PROFILES[args.profile]
+
+    target_config: dict[str, Any] | None = None
+    if args.command == "post":
+        target_config = resolve_target(args.target, args.devices_file)
+        profile_name = args.profile or target_config.get("profile") or "flagship"
+    else:
+        profile_name = args.profile or "flagship"
+
+    profile = PROFILES[profile_name]
     payload = load_payload(args.input)
     message = build_message(profile, args.template, payload, args.title)
 
-    if not args.no_preview:
-        print(message.preview())
+    show_preview = not args.no_preview
+    if args.command == "render" and getattr(args, "json_only", False):
+        show_preview = False
+
+    if show_preview:
+        print(message.preview(visible_spaces=args.visible_spaces, cell_width=args.cell_width))
         print()
 
     if args.command == "render":
+        if args.preview_only and args.json_only:
+            raise SystemExit("choose only one of --preview-only or --json-only")
+        if args.preview_only:
+            return 0
         print(json.dumps(message.to_characters()))
         return 0
 
@@ -524,6 +773,43 @@ def cli(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(result, indent=2))
         return 0
+
+    if args.command == "post":
+        assert target_config is not None
+        kind = str(target_config.get("kind", "")).lower()
+
+        if kind == "cloud":
+            token = target_config.get("token")
+            token_env = target_config.get("token_env")
+            if not token and token_env:
+                token = os.getenv(str(token_env))
+            if not token:
+                raise SystemExit(f"target '{args.target}' is missing token or token_env")
+            result = post_cloud(str(token), message)
+            print(json.dumps(result, indent=2))
+            return 0
+
+        if kind == "local":
+            api_key = target_config.get("api_key")
+            api_key_env = target_config.get("api_key_env")
+            if not api_key and api_key_env:
+                api_key = os.getenv(str(api_key_env))
+            if not api_key:
+                raise SystemExit(f"target '{args.target}' is missing api_key or api_key_env")
+
+            host = str(target_config.get("host") or os.getenv("VESTABOARD_LOCAL_HOST", "http://vestaboard.local:7000"))
+            result = post_local(
+                api_key=str(api_key),
+                host=host,
+                message=message,
+                strategy=target_config.get("strategy"),
+                step_interval_ms=target_config.get("step_interval_ms"),
+                step_size=target_config.get("step_size"),
+            )
+            print(json.dumps(result, indent=2))
+            return 0
+
+        raise SystemExit(f"target '{args.target}' has unsupported kind '{kind}'. Use 'cloud' or 'local'.")
 
     return 1
 
