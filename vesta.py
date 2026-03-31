@@ -988,6 +988,7 @@ def cli(argv: list[str] | None = None) -> int:
     read_cloud_p.add_argument("--visible-spaces", action="store_true")
     read_cloud_p.add_argument("--cell-width", type=int, default=2)
     read_cloud_p.add_argument("--no-ansi", action="store_true")
+    read_cloud_p.add_argument("--json-only", action="store_true", help="Print only the raw character array JSON")
 
     args = parser.parse_args(argv)
 
@@ -996,6 +997,9 @@ def cli(argv: list[str] | None = None) -> int:
             raise SystemExit("missing --token or VESTABOARD_TOKEN")
         profile = PROFILES[args.profile] if args.profile else None
         message = read_cloud(args.token, profile)
+        if args.json_only:
+            print(json.dumps(message.to_characters()))
+            return 0
         print(message.preview(
             visible_spaces=args.visible_spaces,
             cell_width=args.cell_width,
