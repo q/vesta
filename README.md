@@ -8,6 +8,8 @@ The goal is simple:
 
 This repo is intentionally focused on practical use, not a big template language or a hosted service.
 
+<img src="docs/example.png" width="600" alt="Terminal preview showing a metrics board with color indicators and explain output" />
+
 ## What it does
 
 - formats structured data for Vestaboard
