@@ -1,11 +1,11 @@
 {
   "revenue": 84210.50,
   "sessions": 10823,
-  "conversion": 3.2,
-  "bounce_rate": 68.4,
+  "conversion_pct": 3.2,
+  "bounce_rate_pct": 68.4,
   "_style": {
     "revenue": "good",
-    "conversion": {"good": 8, "bad": 2},
-    "bounce_rate": {"good": 30, "bad": 80}
+    "conversion_pct": {"good": 8, "bad": 2},
+    "bounce_rate_pct": {"good": 30, "bad": 80}
   }
 }
