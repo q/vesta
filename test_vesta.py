@@ -12,6 +12,7 @@ from vesta import (
     compact_datetime,
     ellipsize,
     encode_cell,
+    explain_metrics,
     format_metric_value,
     load_payload,
     place_timestamp,
@@ -742,6 +743,49 @@ class TestPreview(unittest.TestCase):
         msg = render_text(FLAGSHIP, "HI")
         preview = msg.preview(visible_spaces=False, ansi_color=False)
         self.assertNotIn("·", preview)
+
+
+class TestExplainMetrics(unittest.TestCase):
+    def test_auto_tone_field_labeled_auto(self):
+        result = explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=False)
+        self.assertIn("auto", result)
+
+    def test_explicit_style_labeled_explicit(self):
+        data = {"score": 90, "_style": {"score": "good"}}
+        result = explain_metrics(data, FLAGSHIP, ansi_color=False)
+        self.assertIn("explicit", result)
+
+    def test_range_style_labeled_range(self):
+        data = {"bounce": 55.0, "_style": {"bounce": {"good": 30, "bad": 80}}}
+        result = explain_metrics(data, FLAGSHIP, ansi_color=False)
+        self.assertIn("range", result)
+
+    def test_range_style_shows_thresholds(self):
+        data = {"bounce": 55.0, "_style": {"bounce": {"good": 30, "bad": 80}}}
+        result = explain_metrics(data, FLAGSHIP, ansi_color=False)
+        self.assertIn("good=30", result)
+        self.assertIn("bad=80", result)
+
+    def test_no_color_fields_returns_empty(self):
+        result = explain_metrics({"revenue": 1000}, FLAGSHIP, ansi_color=False)
+        self.assertEqual(result, "")
+
+    def test_underscore_keys_excluded(self):
+        data = {"change_pct": 5.0, "_style": {"change_pct": "good"}}
+        result = explain_metrics(data, FLAGSHIP, ansi_color=False)
+        self.assertNotIn("_style", result)
+
+    def test_header_line_present(self):
+        result = explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=False)
+        self.assertIn("color indicators", result)
+
+    def test_no_ansi_no_escape_sequences(self):
+        result = explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=False)
+        self.assertNotIn("\033[", result)
+
+    def test_ansi_color_has_escape_sequences(self):
+        result = explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=True)
+        self.assertIn("\033[", result)
 
 
 class TestLoadPayload(unittest.TestCase):
