@@ -569,6 +569,19 @@ class TestRenderTable(unittest.TestCase):
         self.assertEqual(len(msg.grid), 6)
         self.assertEqual(len(msg.grid[0]), 22)
 
+    def test_grid_dimensions_note(self):
+        rows = [{"name": "alice", "score": 10}, {"name": "bob", "score": 20}]
+        msg = render_table(NOTE, rows)
+        self.assertEqual(len(msg.grid), 3)
+        self.assertEqual(len(msg.grid[0]), 15)
+
+    def test_note_fits_header_and_data(self):
+        rows = [{"name": "alice", "score": 10}, {"name": "bob", "score": 20}]
+        msg = render_table(NOTE, rows)
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        # header row should be present
+        self.assertIn("NAME", all_chars)
+
 
 class TestRenderData(unittest.TestCase):
     def test_dict_dispatches_to_kv_layout(self):
@@ -601,6 +614,27 @@ class TestRenderData(unittest.TestCase):
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         self.assertNotIn("CURR", all_chars)
         self.assertNotIn("PCT", all_chars)
+
+    def test_note_dict_grid_dimensions(self):
+        msg = render_data(NOTE, {"temp": 68, "humidity": 42})
+        self.assertEqual(len(msg.grid), NOTE.rows)
+        self.assertEqual(len(msg.grid[0]), NOTE.cols)
+
+    def test_note_dict_shows_label(self):
+        msg = render_data(NOTE, {"temp": 68, "humidity": 42})
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("TEMP", all_chars)
+
+    def test_note_list_grid_dimensions(self):
+        rows = [{"ticker": "DDOG", "change_pct": 2.19}]
+        msg = render_data(NOTE, rows)
+        self.assertEqual(len(msg.grid), NOTE.rows)
+        self.assertEqual(len(msg.grid[0]), NOTE.cols)
+
+    def test_note_metrics_color_indicator(self):
+        msg = render_data(NOTE, {"change_pct": 2.19})
+        all_colors = [c for row in msg.grid for c in row if isinstance(c, Color)]
+        self.assertTrue(len(all_colors) > 0)
 
 
 class TestFormatField(unittest.TestCase):
