@@ -1,6 +1,9 @@
 """Tests for vesta.py — run with: uv run pytest test_vesta.py -v"""
 import unittest
 
+import io
+import textwrap
+
 from vesta import (
     FLAGSHIP,
     NOTE,
@@ -10,6 +13,7 @@ from vesta import (
     ellipsize,
     encode_cell,
     format_metric_value,
+    load_payload,
     place_timestamp,
     prettify_label,
     render_kv,
@@ -666,6 +670,72 @@ class TestPreview(unittest.TestCase):
         msg = render_text(FLAGSHIP, "HI")
         preview = msg.preview(visible_spaces=False, ansi_color=False)
         self.assertNotIn("·", preview)
+
+
+class TestLoadPayload(unittest.TestCase):
+    def _load_str(self, s: str):
+        """Helper: parse s as if it came from stdin."""
+        import unittest.mock as mock
+        with mock.patch("sys.stdin", io.StringIO(s)):
+            return load_payload(None)
+
+    def test_json_dict(self):
+        result = self._load_str('{"a": 1}')
+        self.assertEqual(result, {"a": 1})
+
+    def test_json_list(self):
+        result = self._load_str('[{"a": 1}, {"a": 2}]')
+        self.assertEqual(result, [{"a": 1}, {"a": 2}])
+
+    def test_json_string(self):
+        result = self._load_str('"hello"')
+        self.assertEqual(result, "hello")
+
+    def test_csv_produces_list_of_dicts(self):
+        csv_input = textwrap.dedent("""\
+            name,score,rank
+            alice,98,1
+            bob,87,2
+        """)
+        result = self._load_str(csv_input)
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["name"], "alice")
+        self.assertEqual(result[0]["score"], "98")
+
+    def test_csv_preserves_all_columns(self):
+        csv_input = textwrap.dedent("""\
+            name,score,rank
+            carol,76,3
+        """)
+        result = self._load_str(csv_input)
+        self.assertIn("name", result[0])
+        self.assertIn("score", result[0])
+        self.assertIn("rank", result[0])
+
+    def test_plain_text_falls_through(self):
+        result = self._load_str("not json, not csv")
+        self.assertEqual(result, "not json, not csv")
+
+    def test_empty_input_returns_empty_string(self):
+        result = self._load_str("   ")
+        self.assertEqual(result, "")
+
+    def test_csv_renders_as_table(self):
+        """CSV input should produce the same table as equivalent JSON."""
+        csv_input = textwrap.dedent("""\
+            name,score,rank
+            alice,98,1
+            bob,87,2
+        """)
+        json_input = '[{"name": "alice", "score": "98", "rank": "1"}, {"name": "bob", "score": "87", "rank": "2"}]'
+        with __import__("unittest.mock", fromlist=["mock"]).patch("sys.stdin", io.StringIO(csv_input)):
+            csv_payload = load_payload(None)
+        with __import__("unittest.mock", fromlist=["mock"]).patch("sys.stdin", io.StringIO(json_input)):
+            json_payload = load_payload(None)
+        csv_msg = render_data(FLAGSHIP, csv_payload)
+        json_msg = render_data(FLAGSHIP, json_payload)
+        self.assertEqual(csv_msg.grid, json_msg.grid)
 
 
 if __name__ == "__main__":

@@ -186,6 +186,14 @@ Render a key/value dict:
 echo '{"temp": "72F", "wind": "12mph"}' | vesta render --template kv
 ```
 
+Render a CSV table (CSV is auto-detected, no flag needed):
+
+```bash
+cat scores.csv | vesta render
+# or with a file
+vesta render --input scores.csv
+```
+
 Render a metrics payload with suffix formatting and color indicators:
 
 ```bash
