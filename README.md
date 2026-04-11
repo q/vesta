@@ -96,6 +96,17 @@ implicit — wherever `good` sits numerically is the green end:
 }
 ```
 
+The gradient divides the good→bad range into four equal zones:
+
+| Zone | Color  | Position along good→bad range |
+|------|--------|-------------------------------|
+| 1st quarter | green  | 0–25% of the way to bad |
+| 2nd quarter | yellow | 25–50% |
+| 3rd quarter | orange | 50–75% |
+| 4th quarter | red    | 75–100% (and beyond) |
+
+Values beyond either threshold clamp to green or red.
+
 `_style` and other `_`-prefixed keys are never shown on the board.
 
 **Debug flag:** add `--explain` to see a breakdown of which fields got color

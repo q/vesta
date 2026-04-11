@@ -276,6 +276,44 @@ class TestTone(unittest.TestCase):
     def test_range_equal_good_bad_is_neutral(self):
         self.assertEqual(tone_from_range(50, good=50, bad=50), "neutral")
 
+    # Exact boundary values for the 4-step gradient
+    def test_range_boundary_at_t025_is_warn(self):
+        # t=0.25 → first warn zone
+        self.assertEqual(tone_from_range(42.5, good=30, bad=80), "warn")
+
+    def test_range_boundary_at_t050_is_orange(self):
+        # t=0.50 → orange zone
+        self.assertEqual(tone_from_range(55.0, good=30, bad=80), "orange")
+
+    def test_range_boundary_at_t075_is_bad(self):
+        # t=0.75 → red zone
+        self.assertEqual(tone_from_range(67.5, good=30, bad=80), "bad")
+
+    # resolve_tone: range override does not apply to non-numeric values
+    def test_range_override_non_numeric_returns_none(self):
+        data = {"status": "ok", "_style": {"status": {"good": 0, "bad": 100}}}
+        self.assertIsNone(resolve_tone(data, "status", "ok"))
+
+    # tone_to_color for all semantic tone names
+    def test_tone_to_color_info(self):
+        self.assertEqual(tone_to_color("info"), Color.BLUE)
+
+    def test_tone_to_color_neutral(self):
+        self.assertEqual(tone_to_color("neutral"), Color.WHITE)
+
+    def test_tone_to_color_muted(self):
+        self.assertEqual(tone_to_color("muted"), Color.BLACK)
+
+    def test_tone_to_color_orange(self):
+        self.assertEqual(tone_to_color("orange"), Color.ORANGE)
+
+    # Direct color names are also accepted
+    def test_tone_to_color_direct_green(self):
+        self.assertEqual(tone_to_color("green"), Color.GREEN)
+
+    def test_tone_to_color_direct_violet(self):
+        self.assertEqual(tone_to_color("violet"), Color.VIOLET)
+
 
 class TestSmartRound(unittest.TestCase):
     def test_large_number_no_decimals(self):
