@@ -42,7 +42,7 @@ run "title with bookend tiles" \
   "uv run vesta.py render --input testdata/metrics.json --template data --title 'DAILY METRICS' --preview-only"
 
 run "title + subtitle time" \
-  "uv run vesta.py render --input testdata/metrics_styled.json --template data --title 'DAILY METRICS' --title-color green --subtitle time --valign center --preview-only"
+  "uv run vesta.py render --input testdata/metrics_styled.json --template data --title 'DAILY METRICS' --title-color violet --subtitle time --valign center --preview-only"
 
 run "kv 2-col layout" \
   "uv run vesta.py render --input testdata/weather.json --template kv --columns 2 --preview-only"

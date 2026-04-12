@@ -623,11 +623,18 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
             left_pw = left_lw + 1 + left_vw
             right_pw = right_lw + 1 + right_vw
 
+            # Reserve 1 col at the right edge when any right-column entry has a color,
+            # so the tile can appear after the value rather than before the label.
+            right_has_color = style is not None and any(
+                tone_to_color(resolve_tone(data, k, v)) for k, v in right_items
+            )
+            right_reserve = 1 if right_has_color else 0
+
             # Ensure a minimum 1-col gap; trim the right value width if needed.
-            if left_pw + right_pw >= profile.cols:
-                right_vw = max(0, profile.cols - left_pw - right_lw - 2)
+            if left_pw + right_pw + right_reserve >= profile.cols:
+                right_vw = max(0, profile.cols - left_pw - right_lw - 2 - right_reserve)
                 right_pw = right_lw + 1 + right_vw
-            gap = max(1, profile.cols - left_pw - right_pw)
+            gap = max(1, profile.cols - left_pw - right_pw - right_reserve)
             right_start = left_pw + gap
 
             pairs = list(zip_longest(left_items, right_items))
@@ -640,7 +647,7 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
                     label = ellipsize(normalize_text(str(lk)).replace("_", " "), left_lw).ljust(left_lw)
                     value = ellipsize(normalize_text(format_scalar(lv)), left_vw).rjust(left_vw)
                     place_line(grid, row, f"{label} {value}", align="left", start_col=0)
-                    # Color tile fits in the gap between halves.
+                    # Color tile for left column goes in the gap, right after the value.
                     if style:
                         color = tone_to_color(resolve_tone(data, lk, lv))
                         if color and left_pw < right_start:
@@ -651,11 +658,11 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
                     label = ellipsize(normalize_text(str(rk)).replace("_", " "), right_lw).ljust(right_lw)
                     value = ellipsize(normalize_text(format_scalar(rv)), right_vw).rjust(right_vw)
                     place_line(grid, row, f"{label} {value}", align="left", start_col=right_start)
-                    # Color tile for right column sits in the gap just before the right label.
-                    if style and gap >= 2:
+                    # Color tile for right column goes at the board's right edge.
+                    if right_reserve:
                         color = tone_to_color(resolve_tone(data, rk, rv))
                         if color:
-                            place_cell(grid, row, right_start - 1, color)
+                            place_cell(grid, row, profile.cols - 1, color)
 
                 row += 1
             return RenderedMessage(profile=profile, grid=grid)
