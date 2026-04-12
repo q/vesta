@@ -817,7 +817,7 @@ class TestLoadPayload(unittest.TestCase):
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["name"], "alice")
-        self.assertEqual(result[0]["score"], "98")
+        self.assertEqual(result[0]["score"], 98)
 
     def test_csv_preserves_all_columns(self):
         csv_input = textwrap.dedent("""\
@@ -844,7 +844,7 @@ class TestLoadPayload(unittest.TestCase):
             alice,98,1
             bob,87,2
         """)
-        json_input = '[{"name": "alice", "score": "98", "rank": "1"}, {"name": "bob", "score": "87", "rank": "2"}]'
+        json_input = '[{"name": "alice", "score": 98, "rank": 1}, {"name": "bob", "score": 87, "rank": 2}]'
         with __import__("unittest.mock", fromlist=["mock"]).patch("sys.stdin", io.StringIO(csv_input)):
             csv_payload = load_payload(None)
         with __import__("unittest.mock", fromlist=["mock"]).patch("sys.stdin", io.StringIO(json_input)):

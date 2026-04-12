@@ -757,7 +757,19 @@ def load_payload(path: str | None) -> Any:
         reader = csv.DictReader(io.StringIO(raw))
         rows = list(reader)
         if rows and reader.fieldnames:
-            return rows
+            coerced = []
+            for row in rows:
+                new_row = {}
+                for k, v in row.items():
+                    try:
+                        new_row[k] = int(v)
+                    except (ValueError, TypeError):
+                        try:
+                            new_row[k] = float(v)
+                        except (ValueError, TypeError):
+                            new_row[k] = v
+                coerced.append(new_row)
+            return coerced
     except Exception:
         pass
 
