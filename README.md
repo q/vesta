@@ -100,6 +100,45 @@ cat metrics.json | vesta render --template data --preview-only --explain
 
 ## Layout flags
 
+**`--title TEXT`**
+
+Adds a title row at the top with colored tile bookends. Tries 2 tiles each side, falls back to 1 if the text is long.
+
+**`--title-color COLOR`**
+
+Color of the bookend tiles. Defaults to `white`. Accepts the same names as `_style`: `white`, `green`, `red`, `yellow`, `orange`, `blue`, `violet`.
+
+**`--subtitle TEXT|time`**
+
+Optional second row below the title, with a single tile bookend on each side (same color as title). Use the special value `time` to insert the current time.
+
+```bash
+vesta render --input weather.json --template kv --columns 2 \
+  --title "BROOKLYN WEATHER" --title-color white --subtitle time --preview-only
+```
+
+```
+┌────────────── flagship 6x22 ───────────────┐
+│██ ██  B R O O K L Y N   W E A T H E R  ██ ██│
+│██              1 0 : 0 9 P               ██ │
+│N O W     6 2 F     R A I N           0 %   │
+│L I K E   6 2 F     W I N D     1 5 M P H   │
+│H I G H   6 6 F   ██ U V             4 . 4  │
+│L O W     4 8 F     S E T     7 : 3 2 P M   │
+└────────────────────────────────────────────┘
+```
+
+**`--columns [1|2]`** *(kv template only)*
+
+Pack two key-value pairs per row instead of one. Each column is sized independently to its own content, which creates a natural gap between columns. Color indicators from `_style` or auto-detection still apply: left-column tiles appear in the gap; right-column tiles appear at the board's right edge.
+
+```bash
+echo '{"now":"62F","rain":"0%","high":"66F","low":"48F"}' | \
+  vesta render --template kv --columns 2 --preview-only
+```
+
+Falls back to `--columns 1` with a warning if the content is too wide for the profile.
+
 **`--align [left|center|right]`**
 
 For **metrics** (JSON object): aligns the content block horizontally as a unit. Default is `left`.

@@ -260,7 +260,8 @@ def place_cell(grid: Grid, row_idx: int, col_idx: int, value: Cell) -> None:
 
 def place_title_row(grid: Grid, row_idx: int, text: str, color: Color) -> None:
     """Place a title row with colored tile bookends, text centered between them.
-    Tries 2 tiles each side, falls back to 1 if the text is too long."""
+    Tries 2 tiles each side first (matching the Vestaboard weather-app style),
+    falls back to 1 tile if the text is too long, then plain centered if still too long."""
     cols = len(grid[row_idx])
     text = text.upper()
     for bookend in (2, 1):
@@ -273,7 +274,7 @@ def place_title_row(grid: Grid, row_idx: int, text: str, color: Color) -> None:
             for i, ch in enumerate(text):
                 grid[row_idx][start + i] = ch
             return
-    # Text too long for any bookend — just center it plain
+    # Text fills the whole row — render plain so it isn't dropped entirely.
     place_line(grid, row_idx, text, align="center")
 
 
@@ -600,40 +601,41 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
 
     if columns == 2:
         from itertools import zip_longest
-        half = profile.cols // 2
-        # Warn and fall back if the profile is too narrow for 2-col layout.
-        if half < 6:
-            print(f"warning: profile '{profile.name}' too narrow for --columns 2, falling back to 1", file=sys.stderr)
+
+        max_rows = max(0, profile.rows - row)
+        items = items[: max_rows * 2]
+        left_items = items[::2]
+        right_items = items[1::2]
+
+        def _col_widths(col_items: list) -> tuple[int, int]:
+            lw = max((len(normalize_text(str(k)).replace("_", " ")) for k, _ in col_items), default=0)
+            vw = max((len(normalize_text(format_scalar(v))) for _, v in col_items), default=0)
+            return lw, vw
+
+        # Per-column widths (not global max) so the natural gap between columns reflects
+        # the actual content, rather than being squeezed by whichever column has the longest value.
+        left_lw, left_vw = _col_widths(left_items)
+        right_lw, right_vw = _col_widths(right_items) if right_items else (0, 0)
+        left_pw = left_lw + 1 + left_vw
+        right_pw = right_lw + 1 + right_vw if right_items else 0  # 0, not 1, when right col is empty
+
+        # Fall back to 1-col if the content is too wide: need left pair + 1-col gap + right label.
+        if right_items and left_pw + 1 + right_lw > profile.cols:
+            print(f"warning: content too wide for --columns 2 on '{profile.name}', falling back to 1", file=sys.stderr)
             columns = 1
         else:
-            # Clamp items to the available row budget (each pair = 1 row).
-            max_rows = max(0, profile.rows - row)
-            items = items[: max_rows * 2]
-
-            left_items = items[::2]
-            right_items = items[1::2]
-
-            def _col_widths(col_items: list) -> tuple[int, int]:
-                lw = max((len(normalize_text(str(k)).replace("_", " ")) for k, _ in col_items), default=0)
-                vw = max((len(normalize_text(format_scalar(v))) for _, v in col_items), default=0)
-                return lw, vw
-
-            left_lw, left_vw = _col_widths(left_items)
-            right_lw, right_vw = _col_widths(right_items) if right_items else (0, 0)
-            left_pw = left_lw + 1 + left_vw
-            right_pw = right_lw + 1 + right_vw
-
-            # Reserve 1 col at the right edge when any right-column entry has a color,
-            # so the tile can appear after the value rather than before the label.
-            right_has_color = style is not None and any(
+            # Reserve 1 col at the right edge when any right-column entry has a color
+            # (explicit _style or auto-detected from key name), so the tile appears
+            # after the value rather than before the label.
+            right_has_color = any(
                 tone_to_color(resolve_tone(data, k, v)) for k, v in right_items
             )
             right_reserve = 1 if right_has_color else 0
 
-            # Ensure a minimum 1-col gap; trim the right value width if needed.
+            # Trim right value width if needed to keep at least a 1-col gap.
             if left_pw + right_pw + right_reserve >= profile.cols:
                 right_vw = max(0, profile.cols - left_pw - right_lw - 2 - right_reserve)
-                right_pw = right_lw + 1 + right_vw
+                right_pw = right_lw + 1 + right_vw if right_items else 0
             gap = max(1, profile.cols - left_pw - right_pw - right_reserve)
             right_start = left_pw + gap
 
@@ -647,11 +649,13 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
                     label = ellipsize(normalize_text(str(lk)).replace("_", " "), left_lw).ljust(left_lw)
                     value = ellipsize(normalize_text(format_scalar(lv)), left_vw).rjust(left_vw)
                     place_line(grid, row, f"{label} {value}", align="left", start_col=0)
-                    # Color tile for left column goes in the gap, right after the value.
-                    if style:
-                        color = tone_to_color(resolve_tone(data, lk, lv))
-                        if color and left_pw < right_start:
-                            place_cell(grid, row, left_pw, color)
+                    # Color tile for left column sits in the gap, right after the value.
+                    # Always check resolve_tone — auto-detection works without _style.
+                    # Guard left_pw < right_start: when gap is exactly 1, left_pw == right_start
+                    # and there is no room for a tile without overwriting the right label.
+                    color = tone_to_color(resolve_tone(data, lk, lv))
+                    if color and left_pw < right_start:
+                        place_cell(grid, row, left_pw, color)
 
                 if right_item is not None:
                     rk, rv = right_item
@@ -668,8 +672,10 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
             return RenderedMessage(profile=profile, grid=grid)
 
     # columns == 1 path
-    # Reserve 1 cell for a color tile if _style is present.
-    reserve = 1 if style and profile.cols >= 12 else 0
+    # Reserve 1 cell for a color tile only when an entry will actually produce one.
+    # Check resolve_tone unconditionally — auto-detection works without _style.
+    has_any_color = any(tone_to_color(resolve_tone(data, k, v)) for k, v in items)
+    reserve = 1 if has_any_color and profile.cols >= 12 else 0
     items = items[: max(0, profile.rows - row)]
 
     for key, value in items:

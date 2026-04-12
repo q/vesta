@@ -629,6 +629,71 @@ class TestRenderKv(unittest.TestCase):
         self.assertEqual(len(msg.grid), 6)
         self.assertEqual(len(msg.grid[0]), 22)
 
+    def test_no_spurious_color_reserve(self):
+        # _style referencing a key not in data should not narrow the value column.
+        with_spurious = render_kv(FLAGSHIP, {"name": "alice", "_style": {"nonexistent": "good"}})
+        without_style = render_kv(FLAGSHIP, {"name": "alice"})
+        self.assertEqual(with_spurious.grid, without_style.grid)
+
+    def test_color_reserve_only_when_color_resolves(self):
+        # _style with a real matching key should reserve a column.
+        with_color = render_kv(FLAGSHIP, {"score": 91, "_style": {"score": "good"}})
+        without_style = render_kv(FLAGSHIP, {"score": 91})
+        # The grids should differ because the color tile shifts the value left.
+        self.assertNotEqual(with_color.grid, without_style.grid)
+        # Color tile should appear at the right edge.
+        self.assertIsInstance(with_color.grid[0][-1], Color)
+
+    # --- columns=2 ---
+
+    def test_columns_2_packs_four_items_into_two_rows(self):
+        msg = render_kv(FLAGSHIP, {"a": 1, "b": 2, "c": 3, "d": 4}, columns=2)
+        # 4 items → 2 content rows; rows 2-5 should be blank.
+        for r in range(2, 6):
+            chars = [c for c in msg.grid[r] if isinstance(c, str) and c != " "]
+            self.assertEqual(chars, [], f"row {r} should be blank with 4 items in columns=2")
+
+    def test_columns_2_odd_items_last_row_right_blank(self):
+        # 3 items → 2 content rows; row 1 has left pair only, right side blank.
+        msg = render_kv(FLAGSHIP, {"a": 1, "b": 2, "c": 3}, columns=2)
+        row1_content = [c for c in msg.grid[1] if isinstance(c, str) and c != " "]
+        self.assertTrue(len(row1_content) > 0, "row 1 should have left-pair content")
+        # Row 2 onwards blank (only 2 content rows from 3 items packed into 2 pairs).
+        row2_chars = [c for c in msg.grid[2] if isinstance(c, str) and c != " "]
+        self.assertEqual(row2_chars, [])
+
+    def test_columns_2_single_item_no_crash(self):
+        # 1 item → only left column rendered, right side empty.
+        msg = render_kv(FLAGSHIP, {"name": "alice"}, columns=2)
+        self.assertEqual(len(msg.grid), 6)
+        row0_content = [c for c in msg.grid[0] if isinstance(c, str) and c != " "]
+        self.assertTrue(len(row0_content) > 0)
+        # Rows 1-5 blank.
+        for r in range(1, 6):
+            chars = [c for c in msg.grid[r] if isinstance(c, str) and c != " "]
+            self.assertEqual(chars, [], f"row {r} should be blank with 1 item")
+
+    def test_columns_2_right_color_tile_at_right_edge(self):
+        # Auto-detected pct field in right column → color tile at col 21 (right edge).
+        msg = render_kv(FLAGSHIP, {"a": 1, "growth_pct": 5.0}, columns=2)
+        self.assertIsInstance(msg.grid[0][-1], Color)
+
+    def test_columns_2_no_color_tiles_without_style(self):
+        # Plain keys with no _style and no auto-detected tones → no Color cells.
+        msg = render_kv(FLAGSHIP, {"name": "alice", "city": "nyc"}, columns=2)
+        color_cells = [c for row in msg.grid for c in row if isinstance(c, Color)]
+        self.assertEqual(color_cells, [])
+
+    def test_columns_2_fallback_when_content_too_wide(self):
+        # Left pair width alone exceeds note profile; should fall back to 1-col with a warning.
+        import contextlib
+        data = {"verylonglabel": "val", "hi": "ok"}
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            msg = render_kv(NOTE, data, columns=2)
+        self.assertIn("falling back", buf.getvalue())
+        self.assertEqual(len(msg.grid), NOTE.rows)  # didn't crash
+
 
 class TestRenderTable(unittest.TestCase):
     def test_empty_rows_shows_no_data(self):
