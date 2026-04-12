@@ -447,7 +447,7 @@ def infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: in
     for col in columns:
         header = len(col.replace("_", " ").upper())
         vals = [len(normalize_text(format_scalar(r.get(col, "")))) for r in rows]
-        natural[col] = max([header, *vals, 3])
+        natural[col] = max([header, *vals, 1])
 
     separators = max(0, len(columns) - 1)
     available = total_width - separators
@@ -675,7 +675,13 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
                 row_idx += 1
     else:
         # Center (or single-column): compact block.
-        header = " ".join(fmt_header(col, widths[col]) for col in columns)
+        # Prefer a 2-space inter-column separator for breathing room; fall back
+        # to 1 if the content is too wide to fit.
+        n_gaps = len(columns) - 1
+        content_width = sum(widths[col] for col in columns)
+        sep = "  " if n_gaps > 0 and content_width + 2 * n_gaps <= available_cols else " "
+
+        header = sep.join(fmt_header(col, widths[col]) for col in columns)
         if row_idx < profile.rows:
             place_line(grid, row_idx, header, align=align)
             row_idx += 1
@@ -691,7 +697,7 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
                     row_color = color
                 cells.append(fmt_cell(col, value, widths[col], formatted))
             if row_idx < profile.rows:
-                place_line(grid, row_idx, " ".join(cells), align=align)
+                place_line(grid, row_idx, sep.join(cells), align=align)
                 if row_color and reserve:
                     place_cell(grid, row_idx, profile.cols - 1, row_color)
                 row_idx += 1
