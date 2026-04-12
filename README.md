@@ -137,6 +137,17 @@ echo '{"now":"62F","rain":"0%","high":"66F","low":"48F"}' | \
   vesta render --template kv --columns 2 --preview-only
 ```
 
+```
+┌────────────── flagship 6x22 ───────────────┐
+│N O W     6 2 F             R A I N     0 % │
+│H I G H   6 6 F             L O W     4 8 F │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+└────────────────────────────────────────────┘
+```
+
 Falls back to `--columns 1` with a warning if the content is too wide for the profile.
 
 **`--align [left|center|right]`**
