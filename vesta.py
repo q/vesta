@@ -579,7 +579,9 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
     return RenderedMessage(profile=profile, grid=grid)
 
 
-def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None) -> RenderedMessage:
+def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None, align: str | None = None) -> RenderedMessage:
+    import sys
+    align = align or "center"
     grid = blank_grid(profile)
     row_idx = 0
 
@@ -592,12 +594,38 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
             place_line(grid, row_idx, "NO DATA", align="center")
         return RenderedMessage(profile=profile, grid=grid)
 
-    columns = list(rows[0].keys())[:3]
-
-    # Determine if any column will produce a color tile, to reserve space.
-    color_col = next((c for c in reversed(columns) if tone_to_color(resolve_tone({c: 0}, c, 0))), None)
+    # Determine color-tile reserve first (based on all columns).
+    all_columns = list(rows[0].keys())
+    color_col = next((c for c in reversed(all_columns) if tone_to_color(resolve_tone({c: 0}, c, 0))), None)
     reserve = 1 if color_col and profile.cols >= 12 else 0
     available_cols = profile.cols - reserve
+
+    # Fit as many columns as possible (minimum usable width: 3 chars each).
+    MIN_COL_WIDTH = 3
+    columns = []
+    for col in all_columns:
+        n = len(columns) + 1
+        if (available_cols - (n - 1)) // n >= MIN_COL_WIDTH:
+            columns.append(col)
+        else:
+            break
+    dropped = all_columns[len(columns):]
+    if dropped:
+        print(f"warning: {len(dropped)} column(s) dropped (board too narrow): {', '.join(dropped)}", file=sys.stderr)
+
+    # Determine which columns are purely numeric (for header alignment).
+    numeric_cols = {
+        col for col in columns
+        if rows and all(isinstance(record.get(col, ""), (int, float)) for record in rows)
+    }
+
+    def fmt_header(col: str, width: int) -> str:
+        label = ellipsize(prettify_label(col), width)
+        return label.rjust(width) if col in numeric_cols else label.ljust(width)
+
+    def fmt_cell(col: str, value: Any, width: int, formatted: str) -> str:
+        cell = ellipsize(formatted, width)
+        return cell.rjust(width) if isinstance(value, (int, float)) else cell.ljust(width)
 
     # Use formatted values for width inference.
     formatted_rows = [
@@ -606,29 +634,67 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
     ]
     widths = infer_widths(columns, formatted_rows, available_cols)
 
-    # Header row uses prettified, suffix-stripped column names.
-    header = " ".join(ellipsize(prettify_label(col), widths[col]).ljust(widths[col]) for col in columns)
-    if row_idx < profile.rows:
-        place_line(grid, row_idx, header, align="left")
-        row_idx += 1
+    # For left/right: distribute extra horizontal space as inter-column gaps so
+    # columns span the full board width. For center: compact block, centered.
+    if align in ("left", "right") and len(columns) > 1:
+        total_content = sum(widths[col] for col in columns)
+        extra = available_cols - total_content
+        n_gaps = len(columns) - 1
+        sep_base = extra // n_gaps
+        sep_rem = extra % n_gaps
+        col_starts = []
+        pos = 0
+        for i, col in enumerate(columns):
+            col_starts.append(pos)
+            if i < n_gaps:
+                gap = sep_base + (1 if (align == "left" and i < sep_rem) or (align == "right" and i >= n_gaps - sep_rem) else 0)
+                pos += widths[col] + gap
 
-    visible_rows = rows[: max(0, profile.rows - row_idx)]
-    for record in visible_rows:
-        cells = []
-        row_color = None
-        for col in columns:
-            value = record.get(col, "")
-            _, formatted, color = format_field(col, value, profile)
-            if color:
-                row_color = color
-            is_num = isinstance(value, (int, float))
-            cell = ellipsize(formatted, widths[col])
-            cells.append(cell.rjust(widths[col]) if is_num else cell.ljust(widths[col]))
+        def place_row(row_idx: int, cells: list[str]) -> None:
+            for col, start, cell in zip(columns, col_starts, cells):
+                place_line(grid, row_idx, cell, align="left", start_col=start)
+
         if row_idx < profile.rows:
-            place_line(grid, row_idx, " ".join(cells), align="left")
-            if row_color and reserve:
-                place_cell(grid, row_idx, profile.cols - 1, row_color)
+            place_row(row_idx, [fmt_header(col, widths[col]) for col in columns])
             row_idx += 1
+
+        visible_rows = rows[: max(0, profile.rows - row_idx)]
+        for record in visible_rows:
+            row_color = None
+            data_cells = []
+            for col in columns:
+                value = record.get(col, "")
+                _, formatted, color = format_field(col, value, profile)
+                if color:
+                    row_color = color
+                data_cells.append(fmt_cell(col, value, widths[col], formatted))
+            if row_idx < profile.rows:
+                place_row(row_idx, data_cells)
+                if row_color and reserve:
+                    place_cell(grid, row_idx, profile.cols - 1, row_color)
+                row_idx += 1
+    else:
+        # Center (or single-column): compact block.
+        header = " ".join(fmt_header(col, widths[col]) for col in columns)
+        if row_idx < profile.rows:
+            place_line(grid, row_idx, header, align=align)
+            row_idx += 1
+
+        visible_rows = rows[: max(0, profile.rows - row_idx)]
+        for record in visible_rows:
+            cells = []
+            row_color = None
+            for col in columns:
+                value = record.get(col, "")
+                _, formatted, color = format_field(col, value, profile)
+                if color:
+                    row_color = color
+                cells.append(fmt_cell(col, value, widths[col], formatted))
+            if row_idx < profile.rows:
+                place_line(grid, row_idx, " ".join(cells), align=align)
+                if row_color and reserve:
+                    place_cell(grid, row_idx, profile.cols - 1, row_color)
+                row_idx += 1
 
     return RenderedMessage(profile=profile, grid=grid)
 
@@ -652,13 +718,13 @@ def format_field(key: str, value: Any, profile: BoardProfile, style: dict | None
     return label, formatted, color
 
 
-def render_data(profile: BoardProfile, payload: dict[str, Any] | list[dict[str, Any]], title: str | None = None, valign: str = "top", align: str = "left") -> RenderedMessage:
+def render_data(profile: BoardProfile, payload: dict[str, Any] | list[dict[str, Any]], title: str | None = None, valign: str = "top", align: str | None = None) -> RenderedMessage:
     """Unified renderer for structured data. Accepts a dict (label/value rows) or
     a list of dicts (columnar table). Applies _pct/_curr suffix formatting and
     color indicators to all fields regardless of layout."""
     if isinstance(payload, list):
-        return render_table(profile, payload, title=title)
-    return render_metrics(profile, payload, title=title, valign=valign, align=align)
+        return render_table(profile, payload, title=title, align=align)
+    return render_metrics(profile, payload, title=title, valign=valign, align=align or "left")
 
 
 def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None, valign: str = "top", align: str = "left") -> RenderedMessage:
@@ -722,14 +788,14 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
     return RenderedMessage(profile=profile, grid=grid)
 
 
-def render_auto(profile: BoardProfile, payload: Any, title: str | None = None) -> RenderedMessage:
+def render_auto(profile: BoardProfile, payload: Any, title: str | None = None, align: str | None = None) -> RenderedMessage:
     """Infer the best renderer from the payload type and content."""
     if isinstance(payload, str):
         return render_text(profile, payload)
     if isinstance(payload, dict):
-        return render_data(profile, payload, title=title)
+        return render_data(profile, payload, title=title, align=align)
     if isinstance(payload, list) and payload and all(isinstance(x, dict) for x in payload):
-        return render_data(profile, payload, title=title)
+        return render_data(profile, payload, title=title, align=align)
     return render_text(profile, json.dumps(payload, separators=(",", ":")), align="left")
 
 
@@ -960,7 +1026,7 @@ def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: boo
 # -----------------------------------------------------------------------------
 
 
-def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top", align: str = "left") -> RenderedMessage:
+def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top", align: str | None = None) -> RenderedMessage:
     if is_raw_grid(payload, profile):
         return from_characters(payload, profile)
     if template == "text":
@@ -974,7 +1040,7 @@ def build_message(profile: BoardProfile, template: str, payload: Any, title: str
             raise SystemExit("template=data requires a JSON object or array of objects")
         return render_data(profile, payload, title=title, valign=valign, align=align)
     if template == "auto":
-        return render_auto(profile, payload, title=title)
+        return render_auto(profile, payload, title=title, align=align)
     raise SystemExit(f"unknown template: {template}")
 
 
@@ -992,7 +1058,7 @@ def cli(argv: list[str] | None = None) -> int:
         p.add_argument("--input", default="-", help="Path to input file, or - for stdin")
         p.add_argument("--no-preview", action="store_true")
         p.add_argument("--valign", choices=["top", "center"], default="top", help="Vertical alignment of content block")
-        p.add_argument("--align", choices=["left", "center"], default="left", help="Horizontal alignment of metrics rows")
+        p.add_argument("--align", choices=["left", "center", "right"], default=None, help="Horizontal alignment (default: center for tables, left for metrics)")
         p.add_argument("--timestamp", action="store_true", help="Add current time to bottom-right if space allows")
         p.add_argument("--force-timestamp", action="store_true", help="Add current time to bottom-right, overwriting if needed")
         p.add_argument("--tz", default=None, help="Timezone for timestamp, e.g. America/New_York (default: local)")
