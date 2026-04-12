@@ -583,6 +583,40 @@ class TestRenderText(unittest.TestCase):
         flat = [v for row in chars for v in row]
         self.assertIn(1, flat)  # code 1 = A
 
+    def test_valign_top_places_content_on_first_row(self):
+        msg = render_text(FLAGSHIP, "HELLO", valign="top")
+        # Row 0 should contain content, not be blank
+        row0_chars = [c for c in msg.grid[0] if isinstance(c, str) and c != " "]
+        self.assertTrue(len(row0_chars) > 0, "Expected content in row 0 for valign=top")
+
+    def test_valign_center_places_content_in_middle(self):
+        msg = render_text(FLAGSHIP, "HELLO", valign="center")
+        # Single line on flagship (6 rows): top = (6-1)//2 = 2
+        # Row 0 should be blank
+        row0_chars = [c for c in msg.grid[0] if isinstance(c, str) and c != " "]
+        self.assertEqual(row0_chars, [], "Expected row 0 to be blank for valign=center")
+        # Row 2 should contain content
+        row2_chars = [c for c in msg.grid[2] if isinstance(c, str) and c != " "]
+        self.assertTrue(len(row2_chars) > 0, "Expected content in row 2 for valign=center")
+
+    def test_valign_default_is_center(self):
+        msg_default = render_text(FLAGSHIP, "HELLO")
+        msg_center = render_text(FLAGSHIP, "HELLO", valign="center")
+        self.assertEqual(msg_default.grid, msg_center.grid)
+
+    def test_valign_top_via_build_message(self):
+        # Integration: valign must thread through build_message → render_text
+        from vesta import build_message
+        msg = build_message(FLAGSHIP, "text", "HELLO", None, valign="top")
+        row0_chars = [c for c in msg.grid[0] if isinstance(c, str) and c != " "]
+        self.assertTrue(len(row0_chars) > 0, "Expected content in row 0 for valign=top via build_message")
+
+    def test_valign_center_via_build_message(self):
+        from vesta import build_message
+        msg = build_message(FLAGSHIP, "text", "HELLO", None, valign="center")
+        row0_chars = [c for c in msg.grid[0] if isinstance(c, str) and c != " "]
+        self.assertEqual(row0_chars, [], "Expected row 0 blank for valign=center via build_message")
+
 
 class TestRenderKv(unittest.TestCase):
     def test_underscore_keys_filtered(self):

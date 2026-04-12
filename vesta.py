@@ -258,6 +258,37 @@ def place_cell(grid: Grid, row_idx: int, col_idx: int, value: Cell) -> None:
         grid[row_idx][col_idx] = value
 
 
+def place_title_row(grid: Grid, row_idx: int, text: str, color: Color) -> None:
+    """Place a title row with colored tile bookends, text centered between them.
+    Tries 2 tiles each side, falls back to 1 if the text is too long."""
+    cols = len(grid[row_idx])
+    text = text.upper()
+    for bookend in (2, 1):
+        inner = cols - 2 * bookend
+        if len(text) <= inner:
+            for i in range(bookend):
+                grid[row_idx][i] = color
+                grid[row_idx][cols - 1 - i] = color
+            start = bookend + max(0, (inner - len(text)) // 2)
+            for i, ch in enumerate(text):
+                grid[row_idx][start + i] = ch
+            return
+    # Text too long for any bookend — just center it plain
+    place_line(grid, row_idx, text, align="center")
+
+
+def place_subtitle_row(grid: Grid, row_idx: int, text: str, color: Color) -> None:
+    """Place a subtitle row with a single colored tile bookend on each side."""
+    cols = len(grid[row_idx])
+    text = text.upper()
+    inner = cols - 2
+    grid[row_idx][0] = color
+    grid[row_idx][cols - 1] = color
+    start = 1 + max(0, (inner - len(text)) // 2)
+    for i, ch in enumerate(text[:inner]):
+        grid[row_idx][start + i] = ch
+
+
 # -----------------------------------------------------------------------------
 # Encoding / decoding
 # -----------------------------------------------------------------------------
@@ -537,24 +568,101 @@ def tone_to_color(tone: str | None) -> Color | None:
 # -----------------------------------------------------------------------------
 
 
-def render_text(profile: BoardProfile, text: str, align: str = "center") -> RenderedMessage:
+def render_text(profile: BoardProfile, text: str, align: str = "center", valign: str = "center") -> RenderedMessage:
     grid = blank_grid(profile)
     lines = wrap_text(text, profile.cols, profile.rows)
-    top = max(0, (profile.rows - len(lines)) // 2)
+    if valign == "center":
+        top = max(0, (profile.rows - len(lines)) // 2)
+    else:
+        top = 0
     for i, line in enumerate(lines):
         place_line(grid, top + i, line.rstrip(), align=align)
     return RenderedMessage(profile=profile, grid=grid)
 
 
-def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = None) -> RenderedMessage:
+def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = None, title_color: Color | None = None, subtitle: str | None = None, columns: int = 1) -> RenderedMessage:
+    import sys
     grid = blank_grid(profile)
     row = 0
     if title:
-        place_line(grid, row, title, align="center")
+        if title_color is not None:
+            place_title_row(grid, row, title, title_color)
+        else:
+            place_line(grid, row, title, align="center")
+        row += 1
+    if subtitle and title and row < profile.rows:
+        place_subtitle_row(grid, row, subtitle, title_color or Color.WHITE)
         row += 1
 
+    style = data.get("_style") if isinstance(data.get("_style"), dict) else None
     # Skip internal hint keys (e.g. _style, _template).
     items = [(k, v) for k, v in data.items() if not k.startswith("_")]
+
+    if columns == 2:
+        from itertools import zip_longest
+        half = profile.cols // 2
+        # Warn and fall back if the profile is too narrow for 2-col layout.
+        if half < 6:
+            print(f"warning: profile '{profile.name}' too narrow for --columns 2, falling back to 1", file=sys.stderr)
+            columns = 1
+        else:
+            # Clamp items to the available row budget (each pair = 1 row).
+            max_rows = max(0, profile.rows - row)
+            items = items[: max_rows * 2]
+
+            left_items = items[::2]
+            right_items = items[1::2]
+
+            def _col_widths(col_items: list) -> tuple[int, int]:
+                lw = max((len(normalize_text(str(k)).replace("_", " ")) for k, _ in col_items), default=0)
+                vw = max((len(normalize_text(format_scalar(v))) for _, v in col_items), default=0)
+                return lw, vw
+
+            left_lw, left_vw = _col_widths(left_items)
+            right_lw, right_vw = _col_widths(right_items) if right_items else (0, 0)
+            left_pw = left_lw + 1 + left_vw
+            right_pw = right_lw + 1 + right_vw
+
+            # Ensure a minimum 1-col gap; trim the right value width if needed.
+            if left_pw + right_pw >= profile.cols:
+                right_vw = max(0, profile.cols - left_pw - right_lw - 2)
+                right_pw = right_lw + 1 + right_vw
+            gap = max(1, profile.cols - left_pw - right_pw)
+            right_start = left_pw + gap
+
+            pairs = list(zip_longest(left_items, right_items))
+            for left_item, right_item in pairs:
+                if row >= profile.rows:
+                    break
+
+                if left_item is not None:
+                    lk, lv = left_item
+                    label = ellipsize(normalize_text(str(lk)).replace("_", " "), left_lw).ljust(left_lw)
+                    value = ellipsize(normalize_text(format_scalar(lv)), left_vw).rjust(left_vw)
+                    place_line(grid, row, f"{label} {value}", align="left", start_col=0)
+                    # Color tile fits in the gap between halves.
+                    if style:
+                        color = tone_to_color(resolve_tone(data, lk, lv))
+                        if color and left_pw < right_start:
+                            place_cell(grid, row, left_pw, color)
+
+                if right_item is not None:
+                    rk, rv = right_item
+                    label = ellipsize(normalize_text(str(rk)).replace("_", " "), right_lw).ljust(right_lw)
+                    value = ellipsize(normalize_text(format_scalar(rv)), right_vw).rjust(right_vw)
+                    place_line(grid, row, f"{label} {value}", align="left", start_col=right_start)
+                    # Color tile for right column sits in the gap just before the right label.
+                    if style and gap >= 2:
+                        color = tone_to_color(resolve_tone(data, rk, rv))
+                        if color:
+                            place_cell(grid, row, right_start - 1, color)
+
+                row += 1
+            return RenderedMessage(profile=profile, grid=grid)
+
+    # columns == 1 path
+    # Reserve 1 cell for a color tile if _style is present.
+    reserve = 1 if style and profile.cols >= 12 else 0
     items = items[: max(0, profile.rows - row)]
 
     for key, value in items:
@@ -564,10 +672,13 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
         value_s = normalize_text(format_scalar(value))
         if profile.cols >= 18:
             left_width = min(max(len(key_s), 6), profile.cols // 2)
-            right_width = profile.cols - left_width - 1
+            right_width = profile.cols - left_width - 1 - reserve
             left = ellipsize(key_s, left_width).ljust(left_width)
             right = ellipsize(value_s, right_width).rjust(right_width)
             place_line(grid, row, f"{left} {right}", align="left")
+            color = tone_to_color(resolve_tone(data, key, value))
+            if color and reserve:
+                place_cell(grid, row, profile.cols - 1, color)
         else:
             place_line(grid, row, ellipsize(key_s, profile.cols - 1), align="left")
             row += 1
@@ -579,14 +690,20 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
     return RenderedMessage(profile=profile, grid=grid)
 
 
-def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None, align: str | None = None) -> RenderedMessage:
+def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None, title_color: Color | None = None, subtitle: str | None = None, align: str | None = None) -> RenderedMessage:
     import sys
     align = align or "center"
     grid = blank_grid(profile)
     row_idx = 0
 
     if title:
-        place_line(grid, row_idx, title, align="center")
+        if title_color is not None:
+            place_title_row(grid, row_idx, title, title_color)
+        else:
+            place_line(grid, row_idx, title, align="center")
+        row_idx += 1
+    if subtitle and title and row_idx < profile.rows:
+        place_subtitle_row(grid, row_idx, subtitle, title_color or Color.WHITE)
         row_idx += 1
 
     if not rows:
@@ -724,16 +841,16 @@ def format_field(key: str, value: Any, profile: BoardProfile, style: dict | None
     return label, formatted, color
 
 
-def render_data(profile: BoardProfile, payload: dict[str, Any] | list[dict[str, Any]], title: str | None = None, valign: str = "top", align: str | None = None) -> RenderedMessage:
+def render_data(profile: BoardProfile, payload: dict[str, Any] | list[dict[str, Any]], title: str | None = None, title_color: Color | None = None, subtitle: str | None = None, valign: str = "top", align: str | None = None) -> RenderedMessage:
     """Unified renderer for structured data. Accepts a dict (label/value rows) or
     a list of dicts (columnar table). Applies _pct/_curr suffix formatting and
     color indicators to all fields regardless of layout."""
     if isinstance(payload, list):
-        return render_table(profile, payload, title=title, align=align)
-    return render_metrics(profile, payload, title=title, valign=valign, align=align or "left")
+        return render_table(profile, payload, title=title, title_color=title_color, subtitle=subtitle, align=align)
+    return render_metrics(profile, payload, title=title, title_color=title_color, subtitle=subtitle, valign=valign, align=align or "left")
 
 
-def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None, valign: str = "top", align: str = "left") -> RenderedMessage:
+def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None, title_color: Color | None = None, subtitle: str | None = None, valign: str = "top", align: str = "left") -> RenderedMessage:
     style = data.get("_style") if isinstance(data.get("_style"), dict) else None
     entries = []
     for key, value in data.items():
@@ -742,7 +859,7 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
         label, formatted, color = format_field(key, value, profile, style=style)
         entries.append({"key": key, "label": label, "value": formatted, "tone": color, "color": color})
 
-    title_rows = 1 if title else 0
+    title_rows = (1 if title else 0) + (1 if subtitle and title else 0)
     n_entries = min(len(entries), profile.rows - title_rows)
     used_rows = title_rows + n_entries
     top = (profile.rows - used_rows) // 2 if valign == "center" else 0
@@ -750,7 +867,13 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
     grid = blank_grid(profile)
     row = top
     if title:
-        place_line(grid, row, title, align="center")
+        if title_color is not None:
+            place_title_row(grid, row, title, title_color)
+        else:
+            place_line(grid, row, title, align="center")
+        row += 1
+    if subtitle and title and row < profile.rows:
+        place_subtitle_row(grid, row, subtitle, title_color or Color.WHITE)
         row += 1
 
     if align == "center":
@@ -794,15 +917,15 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
     return RenderedMessage(profile=profile, grid=grid)
 
 
-def render_auto(profile: BoardProfile, payload: Any, title: str | None = None, align: str | None = None) -> RenderedMessage:
+def render_auto(profile: BoardProfile, payload: Any, title: str | None = None, title_color: Color | None = None, subtitle: str | None = None, align: str | None = None, valign: str = "top") -> RenderedMessage:
     """Infer the best renderer from the payload type and content."""
     if isinstance(payload, str):
-        return render_text(profile, payload)
+        return render_text(profile, payload, valign=valign)
     if isinstance(payload, dict):
-        return render_data(profile, payload, title=title, align=align)
+        return render_data(profile, payload, title=title, title_color=title_color, subtitle=subtitle, align=align, valign=valign)
     if isinstance(payload, list) and payload and all(isinstance(x, dict) for x in payload):
-        return render_data(profile, payload, title=title, align=align)
-    return render_text(profile, json.dumps(payload, separators=(",", ":")), align="left")
+        return render_data(profile, payload, title=title, title_color=title_color, subtitle=subtitle, align=align, valign=valign)
+    return render_text(profile, json.dumps(payload, separators=(",", ":")), align="left", valign=valign)
 
 
 # -----------------------------------------------------------------------------
@@ -1032,21 +1155,34 @@ def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: boo
 # -----------------------------------------------------------------------------
 
 
-def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top", align: str | None = None) -> RenderedMessage:
+def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top", align: str | None = None, title_color: Color | None = None, subtitle: str | None = None, tz: str | None = None, columns: int = 1) -> RenderedMessage:
+    # Resolve subtitle "time" keyword to actual current time string
+    resolved_subtitle: str | None = None
+    if subtitle and title:
+        if subtitle.lower() == "time":
+            if tz:
+                from zoneinfo import ZoneInfo
+                now = datetime.now(ZoneInfo(tz))
+            else:
+                now = datetime.now()
+            resolved_subtitle = compact_time(now)
+        else:
+            resolved_subtitle = subtitle
+
     if is_raw_grid(payload, profile):
         return from_characters(payload, profile)
     if template == "text":
-        return render_text(profile, str(payload))
+        return render_text(profile, str(payload), valign=valign)
     if template == "kv":
         if not isinstance(payload, dict):
             raise SystemExit("template=kv requires a JSON object")
-        return render_kv(profile, payload, title=title)
+        return render_kv(profile, payload, title=title, title_color=title_color, subtitle=resolved_subtitle, columns=columns)
     if template in ("data", "table", "metrics"):  # table/metrics kept as aliases
         if not isinstance(payload, (dict, list)):
             raise SystemExit("template=data requires a JSON object or array of objects")
-        return render_data(profile, payload, title=title, valign=valign, align=align)
+        return render_data(profile, payload, title=title, title_color=title_color, subtitle=resolved_subtitle, valign=valign, align=align)
     if template == "auto":
-        return render_auto(profile, payload, title=title, align=align)
+        return render_auto(profile, payload, title=title, title_color=title_color, subtitle=resolved_subtitle, align=align, valign=valign)
     raise SystemExit(f"unknown template: {template}")
 
 
@@ -1061,6 +1197,9 @@ def cli(argv: list[str] | None = None) -> int:
         p.add_argument("--cell-width", type=int, default=2, help="Terminal preview width per board cell")
         p.add_argument("--no-ansi", action="store_true", help="Disable ANSI color in terminal preview")
         p.add_argument("--title")
+        p.add_argument("--title-color", default="white", metavar="COLOR", help="Color of title bookend tiles (default: white). Accepts tone names: white, green, red, yellow, orange, blue, violet")
+        p.add_argument("--subtitle", metavar="TEXT|time", help="Optional subtitle row below title. Use 'time' for current time")
+        p.add_argument("--columns", type=int, choices=[1, 2], default=1, help="Number of key-value pairs per row (kv template only, default: 1)")
         p.add_argument("--input", default="-", help="Path to input file, or - for stdin")
         p.add_argument("--no-preview", action="store_true")
         p.add_argument("--valign", choices=["top", "center"], default="top", help="Vertical alignment of content block")
@@ -1114,7 +1253,8 @@ def cli(argv: list[str] | None = None) -> int:
 
     profile = PROFILES[args.profile]
     payload = load_payload(args.input)
-    message = build_message(profile, args.template, payload, args.title, valign=args.valign, align=args.align)
+    title_color = tone_to_color(args.title_color) if args.title else None
+    message = build_message(profile, args.template, payload, args.title, valign=args.valign, align=args.align, title_color=title_color, subtitle=getattr(args, "subtitle", None), tz=args.tz, columns=args.columns)
 
     if getattr(args, "force_timestamp", False) or getattr(args, "timestamp", False):
         message = place_timestamp(message, tz=args.tz, force=getattr(args, "force_timestamp", False))
