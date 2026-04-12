@@ -2,38 +2,35 @@
 
 A small Python formatter / previewer / publisher for Vestaboard devices.
 
-The goal is simple:
-
-**semantic input → compact board layout → terminal preview → optional publish**
-
-This repo is intentionally focused on practical use, not a big template language or a hosted service.
+**semantic input → board layout → terminal preview → optional publish**
 
 <img src="docs/example.png" width="600" alt="Terminal preview showing a metrics board with color indicators and explain output" />
 
 ## What it does
 
-- formats structured data for Vestaboard
-- supports multiple device profiles
-  - flagship board: **6 x 22**
-  - note: **3 x 15**
-- previews output in the terminal before sending
-- can publish via:
-  - Vestaboard Cloud API
-  - Vestaboard Local API
+- Formats structured data (JSON, CSV, plain text) for Vestaboard
+- Supports multiple device profiles:
+  - flagship: **6 × 22**
+  - note: **3 × 15**
+- Previews output in the terminal before sending
+- Publishes via Vestaboard Cloud API or Local API
 
 ## Templates
 
-- `text` — simple wrapped text
-- `kv` — plain key/value rows, no formatting or color
-- `data` — structured data: pass a JSON object for label/value rows, or a JSON array of objects for a columnar table. Applies suffix formatting (`_pct`, `_curr`) and color indicators to all fields.
-- `auto` — picks a reasonable renderer based on input shape (default)
+| Template | Input | Behaviour |
+|----------|-------|-----------|
+| `text` | string | Wrapped and centered text |
+| `kv` | JSON object | Key / value rows, no formatting |
+| `data` | JSON object or array | Label/value rows (object) or columnar table (array). Applies suffix formatting and color indicators. |
+| `auto` | any | Picks the best renderer based on input shape (default) |
 
-`metrics` and `table` are kept as aliases for `data`.
+`metrics` and `table` are accepted as aliases for `data`.
+
+CSV is auto-detected — no `--template` flag needed.
 
 ## Key suffixes
 
-The `metrics` template recognises special suffixes on field names to handle
-formatting automatically. The suffix is always stripped from the label on the board.
+Field name suffixes control formatting automatically. The suffix is stripped from the label on the board.
 
 | Suffix | Effect |
 |--------|--------|
@@ -49,68 +46,53 @@ formatting automatically. The suffix is always stripped from the label on the bo
 ```
 
 Renders as:
+
 ```
 REVENUE   $84.2K
 SESSIONS  10.8K
-GROWTH    12% ██
+GROWTH    12.4% ██
 ```
 
-## Color indicators (experimental)
+## Color indicators
 
-The `metrics` template supports trailing colored tile indicators on rows.
-Color is driven by semantic tone — not raw cell placement.
+Color is driven by semantic tone, not raw cell placement. The trailing colored tile is added automatically when a tone can be determined.
 
-**Auto-detection:** tone is inferred when a field name contains `pct`, `percent`,
-`change`, `delta`, or `diff` and the value is numeric:
+**Auto-detection:** inferred when a field name contains `pct`, `percent`, `change`, `delta`, or `diff` and the value is numeric:
 - positive → green
 - negative → red
 - zero → white
 
-**Explicit tone:** override any field with `_style`:
+**Explicit tone:** set via `_style`:
 
 ```json
 {
   "score": 91.2,
-  "_style": {
-    "score": "good"
-  }
+  "_style": { "score": "good" }
 }
 ```
 
 Accepted tone names: `good`, `bad`, `warn`, `info`, `neutral`, `muted`,
-or any color directly: `green`, `red`, `yellow`, `blue`, `white`, `black`,
-`violet`, `orange`.
+or a direct color: `green`, `red`, `yellow`, `blue`, `white`, `black`, `violet`, `orange`.
 
-**Range-based tone:** specify `good` and `bad` thresholds and the indicator
-will follow a 4-step green → yellow → orange → red gradient. Direction is
-implicit — wherever `good` sits numerically is the green end:
+**Range-based tone:** specify `good` and `bad` thresholds for a 4-step gradient. Direction is implicit — wherever `good` sits numerically is the green end:
 
 ```json
 {
   "bounce_rate": 68.4,
-  "conversion": 3.2,
-  "_style": {
-    "bounce_rate": {"good": 30, "bad": 80},
-    "conversion":  {"good": 8,  "bad": 2}
-  }
+  "_style": { "bounce_rate": {"good": 30, "bad": 80} }
 }
 ```
 
-The gradient divides the good→bad range into four equal zones:
-
-| Zone | Color  | Position along good→bad range |
-|------|--------|-------------------------------|
-| 1st quarter | green  | 0–25% of the way to bad |
+| Zone | Color | Position |
+|------|-------|----------|
+| 1st quarter | green | 0–25% toward bad |
 | 2nd quarter | yellow | 25–50% |
 | 3rd quarter | orange | 50–75% |
-| 4th quarter | red    | 75–100% (and beyond) |
-
-Values beyond either threshold clamp to green or red.
+| 4th quarter | red | 75–100% (and beyond) |
 
 `_style` and other `_`-prefixed keys are never shown on the board.
 
-**Debug flag:** add `--explain` to see a breakdown of which fields got color
-indicators, why, and what thresholds trigger each zone:
+Use `--explain` to see which fields got indicators and why:
 
 ```bash
 cat metrics.json | vesta render --template data --preview-only --explain
@@ -118,94 +100,84 @@ cat metrics.json | vesta render --template data --preview-only --explain
 
 ## Layout flags
 
-**`--valign [top|center]`** — vertical alignment of the content block.
-Default is `top`. Use `center` when you have fewer rows of data than the
-board height and want breathing room above and below.
+**`--align [left|center|right]`**
 
-**`--align [left|center]`** — horizontal alignment of metrics rows.
-Default is `left`. Use `center` to indent the content block as a unit —
-all rows start at the same left offset (determined by the widest row),
-giving a cleaner look when the data is compact:
+For **metrics** (JSON object): aligns the content block horizontally as a unit. Default is `left`.
+
+For **tables** (JSON array or CSV): default is `center` (compact block, centered). `left` and `right` spread columns edge-to-edge with equal inter-column gaps — first column anchored to the chosen edge, last column anchored to the opposite edge.
+
+**`--valign [top|center]`**
+
+Vertical alignment of the content block. Default is `top`. Use `center` for breathing room when you have fewer rows than the board height.
+
+**`--timestamp`**
+
+Adds the current time (`10:01A`, `9:30P`) to the bottom-right corner. Silently skipped if there isn't room. Use `--force-timestamp` to place it regardless, overwriting content if needed.
+
+**`--tz`**
+
+IANA timezone for the timestamp, e.g. `America/New_York`. Defaults to local system time.
+
+**`--profile [flagship|note]`**
+
+Board profile. Auto-detected from API grid dimensions when publishing. Defaults to flagship.
+
+## Example usage
+
+**Text:**
+
+```bash
+echo '"hello world"' | vesta render --preview-only
+```
 
 ```
 ┌────────────── flagship 6x22 ───────────────┐
 │                                            │
-│      T E M P   6 8                         │
-│      H U M I D I T Y   4 2                 │
-│      W I N D   D E L T A   3 . 2 % ██      │
-│      R A I N   - 1 3 % ██                  │
-│                                  1 : 3 0 P │
+│                                            │
+│          H E L L O   W O R L D             │
+│                                            │
+│                                            │
+│                                            │
 └────────────────────────────────────────────┘
 ```
 
-**`--timestamp`** — adds the current time (`10:01A`, `9:30P`) to the
-bottom-right corner. Requires the timestamp width plus a 2-cell buffer to
-be blank at the right of the last row — silently skipped if there isn't room.
-Use **`--force-timestamp`** to place it regardless.
-
-**`--tz`** — IANA timezone for the timestamp, e.g. `America/New_York`.
-Defaults to local system time. 24h locale support is not yet handled.
+**Key/value:**
 
 ```bash
-cat metrics.json | vesta render --template data \
-  --valign center --align center --timestamp --preview-only
+echo '{"temp": "72F", "wind": "12mph"}' | vesta render --template kv --preview-only
 ```
 
-**Preview a saved board** — if the input is a raw character code grid (the
-JSON output from `--json-only`), vesta decodes and previews it directly:
+```
+┌────────────── flagship 6x22 ───────────────┐
+│T E M P                               7 2 F │
+│W I N D                           1 2 M P H │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+└────────────────────────────────────────────┘
+```
+
+**CSV table** (auto-detected, centered by default):
 
 ```bash
-cat testdata/metrics_styled.json | vesta render --template data --json-only > saved.json
-cat saved.json | vesta render --preview-only
+vesta render --input scores.csv --preview-only
 ```
 
-## Why this exists
-
-Hitting the Vestaboard API directly is easy.
-
-The harder and more useful part is:
-- making structured data fit well on a small grid
-- compacting numbers and timestamps automatically
-- previewing output locally before sending
-- reusing layouts across scripts and data sources
-
-This project is mainly about that rendering layer.
-
-## Installation
-
-```bash
-pip install vesta
+```
+┌────────────── flagship 6x22 ───────────────┐
+│    N A M E       S C O R E     R A N K     │
+│    A L I C E           9 8           1     │
+│    B O B               8 7           2     │
+│    C A R O L           7 6           3     │
+│    D A V E             6 1           4     │
+│                                            │
+└────────────────────────────────────────────┘
 ```
 
-Or run from source with [uv](https://github.com/astral-sh/uv):
+Use `--align left` or `--align right` to spread columns edge-to-edge instead.
 
-```bash
-uv run vesta.py render
-```
-
-## Example usage
-
-Render text:
-
-```bash
-echo '"hello world"' | vesta render
-```
-
-Render a key/value dict:
-
-```bash
-echo '{"temp": "72F", "wind": "12mph"}' | vesta render --template kv
-```
-
-Render a CSV table (CSV is auto-detected, no flag needed):
-
-```bash
-cat scores.csv | vesta render
-# or with a file
-vesta render --input scores.csv
-```
-
-Render a metrics payload with suffix formatting and color indicators:
+**Metrics with color indicators:**
 
 ```bash
 echo '{
@@ -218,54 +190,89 @@ echo '{
     "conversion_pct": {"good": 8, "bad": 2},
     "bounce_rate_pct": {"good": 30, "bad": 80}
   }
-}' | vesta render --template data --valign center --align center --timestamp --preview-only --explain
+}' | vesta render --template data --valign center --align center --timestamp --preview-only
 ```
 
-Preview only (no character output):
+```
+┌────────────── flagship 6x22 ───────────────┐
+│                                            │
+│    R E V E N U E   $ 8 4 . 2 K ██          │
+│    S E S S I O N S   1 0 . 8 K             │
+│    C O N V E R S I O N   3 . 2 % ██        │
+│    B O U N C E   R A T E   6 8 . 4 % ██    │
+│                                  9 : 3 4 P │
+└────────────────────────────────────────────┘
+```
+
+**Note profile:**
 
 ```bash
-cat data.json | vesta render --preview-only
+vesta render --input data.json --profile note --template data --preview-only
 ```
 
-Get raw character codes for the Vestaboard API:
+```
+┌───────── note 3x15 ──────────┐
+│T E M P           $ 7 2 . 0 0 │
+│H U M I D I T Y       5 4 % ██│
+│C H A N G E       - 2 . 1 % ██│
+└──────────────────────────────┘
+```
+
+**Get raw character codes** (for direct API use):
 
 ```bash
 cat data.json | vesta render --json-only
 ```
 
-Publish via Cloud API:
+## Publishing
+
+**Cloud API:**
 
 ```bash
 cat data.json | vesta post-cloud --token $VESTABOARD_TOKEN
 ```
 
-Publish via Local API:
+**Local API:**
 
 ```bash
 cat data.json | vesta post-local --api-key $VESTABOARD_LOCAL_API_KEY
 ```
 
-Preview what's currently on your board:
+**Preview current board state:**
 
 ```bash
 vesta read-cloud
 ```
 
-Uses `VESTABOARD_TOKEN` from the environment. Board profile (flagship vs note) is
-auto-detected from the grid dimensions returned by the API. Pass `--profile` to
-override if needed.
+`VESTABOARD_TOKEN` is read from the environment. Board profile is auto-detected from the grid dimensions returned by the API. Pass `--profile` to override.
 
-Use the Note profile:
+**Re-render a saved board:**
 
 ```bash
-cat data.json | vesta render --profile note --template data
+cat data.json | vesta render --json-only > saved.json
+cat saved.json | vesta render --preview-only
 ```
 
-## Current status
+## Running the examples
 
-Early but functional. Some areas are still experimental:
-- semantic color / tone indicators
-- ANSI terminal preview rendering
-- how much formatting logic belongs in templates vs shared helpers
+```bash
+./run_examples.sh
+```
 
-Comments in the code mark anything that is still being tried and may change.
+Runs all bundled examples against local test data. Requires no API credentials.
+
+## Installation
+
+```bash
+pip install vesta
+```
+
+Or run directly from source with [uv](https://github.com/astral-sh/uv):
+
+```bash
+uv run vesta.py render
+```
+
+## Why this exists
+
+Hitting the Vestaboard API directly is straightforward. The harder part is making structured data fit well on a small fixed-size grid — compacting numbers, handling suffixes, previewing locally, and reusing layouts across scripts and data sources. This project is mainly that rendering layer.
