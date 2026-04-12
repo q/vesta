@@ -119,11 +119,11 @@ vesta render --input weather.json --template kv --columns 2 \
 
 ```
 ┌────────────── flagship 6x22 ───────────────┐
-│██ ██  B R O O K L Y N   W E A T H E R  ██ ██│
-│██              1 0 : 0 9 P               ██ │
+│████  B R O O K L Y N   W E A T H E R   ████│
+│██              1 0 : 4 3 P               ██│
 │N O W     6 2 F     R A I N           0 %   │
 │L I K E   6 2 F     W I N D     1 5 M P H   │
-│H I G H   6 6 F   ██ U V             4 . 4  │
+│H I G H   6 6 F     U V             4 . 4 ██│
 │L O W     4 8 F     S E T     7 : 3 2 P M   │
 └────────────────────────────────────────────┘
 ```
@@ -194,6 +194,24 @@ echo '{"temp": "72F", "wind": "12mph"}' | vesta render --template kv --preview-o
 │                                            │
 │                                            │
 │                                            │
+└────────────────────────────────────────────┘
+```
+
+**Key/value 2-col with title:**
+
+```bash
+vesta render --input testdata/weather.json --template kv --columns 2 \
+  --title "BROOKLYN WEATHER" --subtitle time --preview-only
+```
+
+```
+┌────────────── flagship 6x22 ───────────────┐
+│████  B R O O K L Y N   W E A T H E R   ████│
+│██              1 0 : 4 3 P               ██│
+│N O W     6 2 F     R A I N           0 %   │
+│L I K E   6 2 F     W I N D     1 5 M P H   │
+│H I G H   6 6 F     U V             4 . 4 ██│
+│L O W     4 8 F     S E T     7 : 3 2 P M   │
 └────────────────────────────────────────────┘
 ```
 
