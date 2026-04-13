@@ -1223,7 +1223,6 @@ class TestColumnsWarning(unittest.TestCase):
         )
         self.assertNotIn("--columns", out)
 
-
 class TestCliExplain(unittest.TestCase):
     """End-to-end tests for `vesta render --explain` via the cli() entry point."""
 
@@ -1296,6 +1295,19 @@ class TestCliExplain(unittest.TestCase):
             payload,
         )
         self.assertIn("range", out)
+
+    def test_title_color_none_produces_no_tiles(self):
+        import json as _json
+        out = self._run(
+            ["render", "--template", "kv", "--title", "Weather",
+             "--title-color", "none", "--no-preview", "--no-ansi"],
+            '{"temp": 72}',
+        )
+        grid = _json.loads(out.strip())
+        color_codes = {c.value for c in Color}
+        row0 = grid[0]
+        self.assertFalse(any(cell in color_codes for cell in row0),
+                         "row 0 should have no color tiles with --title-color none")
 
 
 if __name__ == "__main__":

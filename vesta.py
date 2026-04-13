@@ -1213,7 +1213,7 @@ def cli(argv: list[str] | None = None) -> int:
         p.add_argument("--cell-width", type=int, default=2, help="Terminal preview width per board cell")
         p.add_argument("--no-ansi", action="store_true", help="Disable ANSI color in terminal preview")
         p.add_argument("--title")
-        p.add_argument("--title-color", default="white", metavar="COLOR", help="Color of title bookend tiles (default: white). Accepts tone names: white, green, red, yellow, orange, blue, violet")
+        p.add_argument("--title-color", default="white", metavar="COLOR", help="Color of title bookend tiles (default: white). Accepts tone names: white, green, red, yellow, orange, blue, violet, none (plain centered title, no tiles)")
         p.add_argument("--subtitle", metavar="TEXT|time", help="Optional subtitle row below title. Use 'time' for current time")
         p.add_argument("--columns", type=int, choices=[1, 2], default=1, help="Number of key-value pairs per row (kv template only, default: 1)")
         p.add_argument("--input", default="-", help="Path to input file, or - for stdin")
@@ -1269,7 +1269,7 @@ def cli(argv: list[str] | None = None) -> int:
 
     profile = PROFILES[args.profile]
     payload = load_payload(args.input)
-    title_color = tone_to_color(args.title_color) if args.title else None
+    title_color = None if not args.title or args.title_color.lower() == "none" else tone_to_color(args.title_color)
     message = build_message(profile, args.template, payload, args.title, valign=args.valign, align=args.align, title_color=title_color, subtitle=getattr(args, "subtitle", None), tz=args.tz, columns=args.columns)
 
     if getattr(args, "force_timestamp", False) or getattr(args, "timestamp", False):
