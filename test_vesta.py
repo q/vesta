@@ -1312,6 +1312,22 @@ class TestCliExplain(unittest.TestCase):
         )
         self.assertIn("range", out)
 
+    def test_title_newline_splits_into_subtitle(self):
+        from vesta import build_message
+        msg_newline = build_message(FLAGSHIP, "kv", {"temp": 72}, "Weather\nToday",
+                                    title_color=Color.WHITE)
+        msg_explicit = build_message(FLAGSHIP, "kv", {"temp": 72}, "Weather",
+                                     title_color=Color.WHITE, subtitle="Today")
+        self.assertEqual(msg_newline.grid, msg_explicit.grid)
+
+    def test_title_newline_explicit_subtitle_wins(self):
+        from vesta import build_message
+        msg_with_newline_sub = build_message(FLAGSHIP, "kv", {"temp": 72}, "Weather\nFromNewline",
+                                             title_color=Color.WHITE, subtitle="Explicit")
+        msg_direct = build_message(FLAGSHIP, "kv", {"temp": 72}, "Weather",
+                                   title_color=Color.WHITE, subtitle="Explicit")
+        self.assertEqual(msg_with_newline_sub.grid, msg_direct.grid)
+
     def test_title_color_none_produces_no_tiles(self):
         import json as _json
         out = self._run(

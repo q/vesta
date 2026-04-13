@@ -1172,6 +1172,14 @@ def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: boo
 
 
 def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top", align: str | None = None, title_color: Color | None = None, subtitle: str | None = None, tz: str | None = None, columns: int = 1) -> RenderedMessage:
+    # A newline in the title splits it: first line → title, second line → subtitle
+    # (only when no explicit subtitle was provided).
+    if title and "\n" in title:
+        parts = title.split("\n", 1)
+        title = parts[0]
+        if not subtitle:
+            subtitle = parts[1]
+
     # Resolve subtitle "time" keyword to actual current time string
     resolved_subtitle: str | None = None
     if subtitle and title:
