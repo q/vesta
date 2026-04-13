@@ -9,6 +9,7 @@ from vesta import (
     NOTE,
     Color,
     blank_grid,
+    cli,
     compact_datetime,
     ellipsize,
     encode_cell,
@@ -1142,6 +1143,80 @@ class TestNoteEdgeCases(unittest.TestCase):
         finally:
             sys.stderr = orig
         self.assertEqual(stderr_capture.getvalue(), "")
+
+
+class TestCliExplain(unittest.TestCase):
+    """End-to-end tests for `vesta render --explain` via the cli() entry point."""
+
+    def _run(self, argv: list[str], stdin_text: str) -> str:
+        """Call cli() with patched stdin and return captured stdout."""
+        import contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            with __import__("unittest.mock", fromlist=["patch"]).patch(
+                "sys.stdin", io.StringIO(stdin_text)
+            ):
+                cli(argv)
+        return buf.getvalue()
+
+    def test_explain_auto_tone_appears_in_output(self):
+        # change_pct with positive value → auto-detected green → "auto" in explain output.
+        out = self._run(
+            ["render", "--explain", "--no-preview", "--no-ansi"],
+            '{"change_pct": 5.0}',
+        )
+        self.assertIn("auto", out)
+
+    def test_explain_shows_field_label(self):
+        out = self._run(
+            ["render", "--explain", "--no-preview", "--no-ansi"],
+            '{"change_pct": 5.0}',
+        )
+        self.assertIn("CHANGE", out)
+
+    def test_explain_explicit_style_shown(self):
+        # _style with an explicit tone → "explicit" in explain output.
+        out = self._run(
+            ["render", "--explain", "--no-preview", "--no-ansi"],
+            '{"score": 91, "_style": {"score": "good"}}',
+        )
+        self.assertIn("explicit", out)
+
+    def test_explain_silent_when_no_color_fields(self):
+        # Plain dict with no tone-triggering keys → explain returns "" → nothing extra.
+        out = self._run(
+            ["render", "--explain", "--no-preview", "--no-ansi"],
+            '{"name": "alice", "city": "nyc"}',
+        )
+        # Output should be only the JSON array (no explain block).
+        import json as _json
+        parsed = _json.loads(out.strip())
+        self.assertIsInstance(parsed, list)
+
+    def test_explain_skipped_for_list_payload(self):
+        # --explain is silently ignored when payload is a list (table data).
+        out = self._run(
+            ["render", "--explain", "--no-preview", "--no-ansi"],
+            '[{"ticker": "DDOG", "change_pct": 2.19}]',
+        )
+        # Should not contain "auto" or "explicit" — just JSON output.
+        self.assertNotIn("auto", out)
+        self.assertNotIn("explicit", out)
+
+    def test_explain_works_on_note_profile(self):
+        out = self._run(
+            ["render", "--explain", "--no-preview", "--no-ansi", "--profile", "note"],
+            '{"change_pct": -3.5}',
+        )
+        self.assertIn("auto", out)
+
+    def test_explain_with_range_style_shows_range(self):
+        payload = '{"temp": 75, "_style": {"temp": {"good": 65, "bad": 90}}}'
+        out = self._run(
+            ["render", "--explain", "--no-preview", "--no-ansi"],
+            payload,
+        )
+        self.assertIn("range", out)
 
 
 if __name__ == "__main__":
