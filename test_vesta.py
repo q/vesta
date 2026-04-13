@@ -10,6 +10,7 @@ from vesta import (
     Color,
     blank_grid,
     cli,
+    place_separator,
     compact_datetime,
     ellipsize,
     encode_cell,
@@ -801,6 +802,57 @@ class TestRenderKv(unittest.TestCase):
         with_sub = render_kv(FLAGSHIP, {"temp": 72}, subtitle="Sub")
         without = render_kv(FLAGSHIP, {"temp": 72})
         self.assertEqual(with_sub.grid, without.grid)
+
+
+class TestSeparator(unittest.TestCase):
+    def test_solid_color_fills_row(self):
+        msg = render_kv(FLAGSHIP, {"temp": 72}, separator="white")
+        # Row 0 = content (no title), so separator is row 0.
+        self.assertTrue(all(c == Color.WHITE for c in msg.grid[0]))
+
+    def test_separator_below_title(self):
+        msg = render_kv(FLAGSHIP, {"temp": 72}, title="T", title_color=Color.WHITE,
+                        separator="white")
+        # Row 0 = title, row 1 = separator.
+        self.assertTrue(all(c == Color.WHITE for c in msg.grid[1]))
+
+    def test_separator_below_subtitle(self):
+        msg = render_kv(FLAGSHIP, {"temp": 72}, title="T", title_color=Color.WHITE,
+                        subtitle="S", separator="white")
+        # Row 0 = title, row 1 = subtitle, row 2 = separator.
+        self.assertTrue(all(c == Color.WHITE for c in msg.grid[2]))
+
+    def test_rainbow_cycles_through_colors(self):
+        msg = render_kv(FLAGSHIP, {"temp": 72}, separator="rainbow")
+        row = msg.grid[0]
+        colors = [c for c in row if isinstance(c, Color)]
+        # All cells should be Color instances and not all the same color.
+        self.assertEqual(len(colors), FLAGSHIP.cols)
+        self.assertGreater(len(set(colors)), 1)
+
+    def test_alternating_pattern(self):
+        msg = render_kv(FLAGSHIP, {"temp": 72}, separator="red,black")
+        row = msg.grid[0]
+        self.assertEqual(row[0], Color.RED)
+        self.assertEqual(row[1], Color.BLACK)
+        self.assertEqual(row[2], Color.RED)
+
+    def test_separator_reduces_content_rows(self):
+        without = render_kv(FLAGSHIP, {f"k{i}": i for i in range(6)})
+        with_sep = render_kv(FLAGSHIP, {f"k{i}": i for i in range(6)}, separator="white")
+        without_chars = "".join(c for row in without.grid for c in row if isinstance(c, str) and c != " ")
+        with_chars = "".join(c for row in with_sep.grid for c in row if isinstance(c, str) and c != " ")
+        self.assertGreater(len(without_chars), len(with_chars))
+
+    def test_separator_via_cli(self):
+        from vesta import build_message
+        msg = build_message(FLAGSHIP, "kv", {"temp": 72}, None, separator="rainbow")
+        self.assertTrue(all(isinstance(c, Color) for c in msg.grid[0]))
+
+    def test_place_separator_unknown_color_defaults_to_white(self):
+        grid = [[" "] * FLAGSHIP.cols for _ in range(FLAGSHIP.rows)]
+        place_separator(grid, 0, "notacolor")
+        self.assertTrue(all(c == Color.WHITE for c in grid[0]))
 
 
 class TestRenderTable(unittest.TestCase):
