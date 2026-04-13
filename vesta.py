@@ -649,12 +649,11 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
                     label = ellipsize(normalize_text(str(lk)).replace("_", " "), left_lw).ljust(left_lw)
                     value = ellipsize(normalize_text(format_scalar(lv)), left_vw).rjust(left_vw)
                     place_line(grid, row, f"{label} {value}", align="left", start_col=0)
-                    # Color tile for left column sits in the gap, right after the value.
-                    # Always check resolve_tone — auto-detection works without _style.
-                    # Guard left_pw < right_start: when gap is exactly 1, left_pw == right_start
-                    # and there is no room for a tile without overwriting the right label.
+                    # Color tile for left column sits in the gap cell right after the value.
+                    # gap = max(1, …) guarantees right_start > left_pw, so the tile at
+                    # left_pw never overlaps the right label that starts at right_start.
                     color = tone_to_color(resolve_tone(data, lk, lv))
-                    if color and left_pw < right_start:
+                    if color:
                         place_cell(grid, row, left_pw, color)
 
                 if right_item is not None:
