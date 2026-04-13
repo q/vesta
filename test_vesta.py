@@ -694,6 +694,88 @@ class TestRenderKv(unittest.TestCase):
         self.assertIn("falling back", buf.getvalue())
         self.assertEqual(len(msg.grid), NOTE.rows)  # didn't crash
 
+    # --- long keys / value truncation (wide-board single-col path) ---
+
+    def test_long_key_truncated_on_flagship(self):
+        # Wide path: max key display = min(max(len, 6), cols//2) = 11 for FLAGSHIP.
+        long_key = "averylonglabelname"  # 18 chars, truncated to 11
+        msg = render_kv(FLAGSHIP, {long_key: 42})
+        self.assertEqual(len(msg.grid), FLAGSHIP.rows)
+        self.assertEqual(len(msg.grid[0]), FLAGSHIP.cols)
+
+    def test_long_key_content_fits_in_row(self):
+        long_key = "x" * 20
+        msg = render_kv(FLAGSHIP, {long_key: "val"})
+        for row in msg.grid:
+            self.assertEqual(len(row), FLAGSHIP.cols)
+
+    def test_long_value_truncated_on_flagship(self):
+        # right_width = 22 - left_width - 1 - reserve; value must not exceed it.
+        msg = render_kv(FLAGSHIP, {"k": "a" * 30})
+        self.assertEqual(len(msg.grid), FLAGSHIP.rows)
+        for row in msg.grid:
+            self.assertEqual(len(row), FLAGSHIP.cols)
+
+    # --- note profile single-col (narrow path) ---
+
+    def test_note_1col_label_appears(self):
+        msg = render_kv(NOTE, {"temp": 72})
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("TEMP", all_chars)
+
+    def test_note_1col_value_appears(self):
+        msg = render_kv(NOTE, {"temp": 72})
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("72", all_chars)
+
+    def test_note_1col_label_on_row0_value_on_row1(self):
+        msg = render_kv(NOTE, {"temp": 72})
+        row0 = "".join(c for c in msg.grid[0] if isinstance(c, str))
+        row1 = "".join(c for c in msg.grid[1] if isinstance(c, str))
+        self.assertIn("TEMP", row0)
+        self.assertIn("72", row1)
+
+    def test_note_1col_two_pairs_fit(self):
+        # Each pair uses 2 rows; 2 pairs fill all 3 rows of NOTE (second value dropped).
+        msg = render_kv(NOTE, {"a": 1, "b": 2})
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("A", all_chars)
+        self.assertIn("1", all_chars)
+        self.assertIn("B", all_chars)
+
+    # --- title and subtitle on kv ---
+
+    def test_title_appears_in_kv(self):
+        msg = render_kv(FLAGSHIP, {"temp": 72}, title="Weather")
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("WEATHER", all_chars)
+
+    def test_title_color_places_color_tiles(self):
+        msg = render_kv(FLAGSHIP, {"temp": 72}, title="Weather", title_color=Color.BLUE)
+        color_cells = [c for row in msg.grid for c in row if isinstance(c, Color)]
+        self.assertTrue(len(color_cells) > 0)
+
+    def test_subtitle_appears_in_kv(self):
+        msg = render_kv(FLAGSHIP, {"temp": 72}, title="Weather", subtitle="Today")
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("TODAY", all_chars)
+
+    def test_title_and_subtitle_reduce_content_rows(self):
+        # With title + subtitle, only 4 rows remain for content on FLAGSHIP.
+        # Without them, all 6 rows are available.
+        plain = render_kv(FLAGSHIP, {f"k{i}": i for i in range(6)})
+        with_header = render_kv(FLAGSHIP, {f"k{i}": i for i in range(6)}, title="T", subtitle="S")
+        plain_chars = "".join(c for row in plain.grid for c in row if isinstance(c, str) and c != " ")
+        header_chars = "".join(c for row in with_header.grid for c in row if isinstance(c, str) and c != " ")
+        # plain should show more kv content than with_header
+        self.assertGreater(len(plain_chars), len(header_chars))
+
+    def test_subtitle_without_title_ignored(self):
+        # subtitle is silently ignored when no title is provided.
+        with_sub = render_kv(FLAGSHIP, {"temp": 72}, subtitle="Sub")
+        without = render_kv(FLAGSHIP, {"temp": 72})
+        self.assertEqual(with_sub.grid, without.grid)
+
 
 class TestRenderTable(unittest.TestCase):
     def test_empty_rows_shows_no_data(self):
