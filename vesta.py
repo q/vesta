@@ -1182,6 +1182,10 @@ def build_message(profile: BoardProfile, template: str, payload: Any, title: str
         else:
             resolved_subtitle = subtitle
 
+    if columns > 1 and template not in ("kv", "auto"):
+        import sys
+        print(f"warning: --columns {columns} has no effect on template '{template}'", file=sys.stderr)
+
     if is_raw_grid(payload, profile):
         return from_characters(payload, profile)
     if template == "text":

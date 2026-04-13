@@ -1145,6 +1145,76 @@ class TestNoteEdgeCases(unittest.TestCase):
         self.assertEqual(stderr_capture.getvalue(), "")
 
 
+class TestColumnsWarning(unittest.TestCase):
+    """--columns 2 on non-kv templates should emit a warning."""
+
+    def _stderr_for(self, argv: list[str], stdin_text: str) -> str:
+        import contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()):
+            with contextlib.redirect_stderr(buf):
+                with __import__("unittest.mock", fromlist=["patch"]).patch(
+                    "sys.stdin", io.StringIO(stdin_text)
+                ):
+                    cli(argv)
+        return buf.getvalue()
+
+    def test_columns_2_warns_on_text_template(self):
+        out = self._stderr_for(
+            ["render", "--columns", "2", "--template", "text", "--no-preview"],
+            '"hello"',
+        )
+        self.assertIn("warning", out)
+        self.assertIn("text", out)
+
+    def test_columns_2_warns_on_data_template(self):
+        out = self._stderr_for(
+            ["render", "--columns", "2", "--template", "data", "--no-preview"],
+            '{"score": 91}',
+        )
+        self.assertIn("warning", out)
+        self.assertIn("data", out)
+
+    def test_columns_2_warns_on_table_template(self):
+        out = self._stderr_for(
+            ["render", "--columns", "2", "--template", "table", "--no-preview"],
+            '[{"name": "alice", "score": 10}]',
+        )
+        self.assertIn("warning", out)
+        self.assertIn("table", out)
+
+    def test_columns_2_warns_on_metrics_template(self):
+        out = self._stderr_for(
+            ["render", "--columns", "2", "--template", "metrics", "--no-preview"],
+            '{"score": 91}',
+        )
+        self.assertIn("warning", out)
+        self.assertIn("metrics", out)
+
+    def test_columns_2_no_warning_on_kv_template(self):
+        out = self._stderr_for(
+            ["render", "--columns", "2", "--template", "kv", "--no-preview"],
+            '{"a": 1, "b": 2}',
+        )
+        self.assertNotIn("warning", out)
+
+    def test_columns_1_no_warning_on_any_template(self):
+        # Default --columns 1 should never trigger the warning.
+        out = self._stderr_for(
+            ["render", "--template", "text", "--no-preview"],
+            '"hello"',
+        )
+        self.assertNotIn("warning", out)
+
+    def test_columns_2_no_warning_on_auto_template(self):
+        # auto may route to kv; suppress the warning for auto.
+        out = self._stderr_for(
+            ["render", "--columns", "2", "--template", "auto", "--no-preview"],
+            '{"a": 1, "b": 2}',
+        )
+        self.assertNotIn("--columns", out)
+
+
 class TestCliExplain(unittest.TestCase):
     """End-to-end tests for `vesta render --explain` via the cli() entry point."""
 
