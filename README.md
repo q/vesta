@@ -104,13 +104,40 @@ cat metrics.json | vesta render --template data --preview-only --explain
 
 Adds a title row at the top with colored tile bookends. Tries 2 tiles each side, falls back to 1 if the text is long.
 
-**`--title-color COLOR`**
+**`--title-color COLOR|none`**
 
-Color of the bookend tiles. Defaults to `white`. Accepts the same names as `_style`: `white`, `green`, `red`, `yellow`, `orange`, `blue`, `violet`.
+Color of the bookend tiles. Defaults to `white`. Pass `none` for a plain centered title with no tiles.
 
 **`--subtitle TEXT|time`**
 
-Optional second row below the title, with a single tile bookend on each side (same color as title). Use the special value `time` to insert the current time.
+Optional second row below the title, with a single tile bookend on each side (same color as title). Use the special value `time` to insert the current time. You can also embed the subtitle directly in the title using a newline — `--title $'Weather\nSan Francisco'` — and the second line becomes the subtitle automatically (explicit `--subtitle` takes precedence).
+
+**`--separator [PATTERN]`**
+
+Adds a full-width row of colored tiles below the title block (after subtitle if present). Used alone, defaults to solid white. Accepts:
+
+| Pattern | Result |
+|---------|--------|
+| *(omitted)* | solid white |
+| `white`, `blue`, `red`, … | solid named color |
+| `rainbow` | R O Y G B V cycling |
+| `red,black` | alternating colors |
+
+```bash
+echo '{"temp": "72F", "wind": "12mph", "humidity": "45%"}' | \
+  vesta render --template kv --title "Weather" --separator rainbow --preview-only
+```
+
+```
+┌────────────── flagship 6x22 ───────────────┐
+│████          W E A T H E R             ████│
+│████████████████████████████████████████████│
+│T E M P                               7 2 F │
+│W I N D                           1 2 M P H │
+│H U M I D I T Y                       4 5 % │
+│                                            │
+└────────────────────────────────────────────┘
+```
 
 ```bash
 vesta render --input weather.json --template kv --columns 2 \
