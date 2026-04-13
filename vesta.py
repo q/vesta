@@ -295,7 +295,7 @@ def place_subtitle_row(grid: Grid, row_idx: int, text: str, color: Color) -> Non
 
 
 SEPARATOR_PATTERNS: dict[str, list[Color]] = {
-    "rainbow": [Color.RED, Color.ORANGE, Color.YELLOW, Color.GREEN, Color.BLUE, Color.VIOLET, Color.WHITE],
+    "rainbow": [Color.RED, Color.ORANGE, Color.YELLOW, Color.GREEN, Color.BLUE, Color.VIOLET],
 }
 
 
