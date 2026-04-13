@@ -279,15 +279,19 @@ def place_title_row(grid: Grid, row_idx: int, text: str, color: Color) -> None:
 
 
 def place_subtitle_row(grid: Grid, row_idx: int, text: str, color: Color) -> None:
-    """Place a subtitle row with a single colored tile bookend on each side."""
+    """Place a subtitle row with a single colored tile bookend on each side.
+    Falls back to plain centered text if the text is too long to fit with tiles."""
     cols = len(grid[row_idx])
     text = text.upper()
     inner = cols - 2
-    grid[row_idx][0] = color
-    grid[row_idx][cols - 1] = color
-    start = 1 + max(0, (inner - len(text)) // 2)
-    for i, ch in enumerate(text[:inner]):
-        grid[row_idx][start + i] = ch
+    if len(text) <= inner:
+        grid[row_idx][0] = color
+        grid[row_idx][cols - 1] = color
+        start = 1 + max(0, (inner - len(text)) // 2)
+        for i, ch in enumerate(text):
+            grid[row_idx][start + i] = ch
+    else:
+        place_line(grid, row_idx, text, align="center")
 
 
 # -----------------------------------------------------------------------------

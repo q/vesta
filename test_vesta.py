@@ -770,6 +770,22 @@ class TestRenderKv(unittest.TestCase):
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         self.assertIn("TODAY", all_chars)
 
+    def test_subtitle_short_has_color_tiles(self):
+        msg = render_kv(FLAGSHIP, {"temp": 72}, title="Weather", subtitle="Today",
+                        title_color=Color.BLUE)
+        row1 = msg.grid[1]
+        self.assertIsInstance(row1[0], Color)
+        self.assertIsInstance(row1[-1], Color)
+
+    def test_subtitle_long_falls_back_to_plain_no_tiles(self):
+        # Subtitle longer than cols-2 (20 chars on FLAGSHIP) should render without tiles.
+        long_sub = "A" * 21  # 21 > 22-2=20
+        msg = render_kv(FLAGSHIP, {"temp": 72}, title="T", subtitle=long_sub,
+                        title_color=Color.BLUE)
+        row1 = msg.grid[1]
+        self.assertNotIsInstance(row1[0], Color)
+        self.assertNotIsInstance(row1[-1], Color)
+
     def test_title_and_subtitle_reduce_content_rows(self):
         # With title + subtitle, only 4 rows remain for content on FLAGSHIP.
         # Without them, all 6 rows are available.
