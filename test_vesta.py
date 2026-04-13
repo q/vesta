@@ -766,6 +766,34 @@ class TestRenderKv(unittest.TestCase):
         color_cells = [c for row in msg.grid for c in row if isinstance(c, Color)]
         self.assertTrue(len(color_cells) > 0)
 
+    def test_title_multi_color_three_tiles_each_side(self):
+        msg = render_kv(FLAGSHIP, {"temp": 72}, title="Hi",
+                        title_color=[Color.RED, Color.BLUE, Color.ORANGE])
+        row = msg.grid[0]
+        self.assertEqual(row[0], Color.RED)
+        self.assertEqual(row[1], Color.BLUE)
+        self.assertEqual(row[2], Color.ORANGE)
+        # Right side mirrored.
+        self.assertEqual(row[-3], Color.ORANGE)
+        self.assertEqual(row[-2], Color.BLUE)
+        self.assertEqual(row[-1], Color.RED)
+
+    def test_title_multi_color_two_tiles_each_side(self):
+        msg = render_kv(FLAGSHIP, {"temp": 72}, title="Hi",
+                        title_color=[Color.RED, Color.BLUE])
+        row = msg.grid[0]
+        self.assertEqual(row[0], Color.RED)
+        self.assertEqual(row[1], Color.BLUE)
+        self.assertEqual(row[-2], Color.BLUE)
+        self.assertEqual(row[-1], Color.RED)
+
+    def test_title_multi_color_subtitle_uses_lead_color(self):
+        msg = render_kv(FLAGSHIP, {"temp": 72}, title="Weather", subtitle="Today",
+                        title_color=[Color.RED, Color.BLUE, Color.ORANGE])
+        # Subtitle bookend should be RED (first/lead color).
+        self.assertEqual(msg.grid[1][0], Color.RED)
+        self.assertEqual(msg.grid[1][-1], Color.RED)
+
     def test_subtitle_appears_in_kv(self):
         msg = render_kv(FLAGSHIP, {"temp": 72}, title="Weather", subtitle="Today")
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))

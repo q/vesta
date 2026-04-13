@@ -258,24 +258,36 @@ def place_cell(grid: Grid, row_idx: int, col_idx: int, value: Cell) -> None:
         grid[row_idx][col_idx] = value
 
 
-def place_title_row(grid: Grid, row_idx: int, text: str, color: Color) -> None:
+def place_title_row(grid: Grid, row_idx: int, text: str, color: Color | list[Color]) -> None:
     """Place a title row with colored tile bookends, text centered between them.
-    Tries 2 tiles each side first (matching the Vestaboard weather-app style),
-    falls back to 1 tile if the text is too long, then plain centered if still too long."""
+    color may be a single Color (tries 2 tiles then 1) or a list of 1–3 Colors
+    (tries len(colors) tiles then fewer). Right side mirrors the left (reversed).
+    Falls back to plain centered text if the text is too long for even 1 tile."""
     cols = len(grid[row_idx])
     text = text.upper()
-    for bookend in (2, 1):
+    color_list: list[Color] = [color, color] if isinstance(color, Color) else list(color[:3])
+    for bookend in range(len(color_list), 0, -1):
         inner = cols - 2 * bookend
         if len(text) <= inner:
-            for i in range(bookend):
-                grid[row_idx][i] = color
-                grid[row_idx][cols - 1 - i] = color
+            left = color_list[:bookend]
+            right = list(reversed(left))
+            for i, c in enumerate(left):
+                grid[row_idx][i] = c
+            for i, c in enumerate(right):
+                grid[row_idx][cols - bookend + i] = c
             start = bookend + max(0, (inner - len(text)) // 2)
             for i, ch in enumerate(text):
                 grid[row_idx][start + i] = ch
             return
     # Text fills the whole row — render plain so it isn't dropped entirely.
     place_line(grid, row_idx, text, align="center")
+
+
+def _lead_color(color: Color | list[Color] | None, default: Color = Color.WHITE) -> Color:
+    """Return the first (leftmost) color from a Color or list, for single-tile uses."""
+    if color is None:
+        return default
+    return color[0] if isinstance(color, list) else color
 
 
 def place_subtitle_row(grid: Grid, row_idx: int, text: str, color: Color) -> None:
@@ -604,7 +616,7 @@ def render_text(profile: BoardProfile, text: str, align: str = "center", valign:
     return RenderedMessage(profile=profile, grid=grid)
 
 
-def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = None, title_color: Color | None = None, subtitle: str | None = None, columns: int = 1, separator: str | None = None) -> RenderedMessage:
+def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, columns: int = 1, separator: str | None = None) -> RenderedMessage:
     import sys
     grid = blank_grid(profile)
     row = 0
@@ -615,7 +627,7 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
             place_line(grid, row, title, align="center")
         row += 1
     if subtitle and title and row < profile.rows:
-        place_subtitle_row(grid, row, subtitle, title_color or Color.WHITE)
+        place_subtitle_row(grid, row, subtitle, _lead_color(title_color))
         row += 1
     if separator and row < profile.rows:
         place_separator(grid, row, separator)
@@ -728,7 +740,7 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
     return RenderedMessage(profile=profile, grid=grid)
 
 
-def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None, title_color: Color | None = None, subtitle: str | None = None, align: str | None = None, separator: str | None = None) -> RenderedMessage:
+def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, align: str | None = None, separator: str | None = None) -> RenderedMessage:
     import sys
     align = align or "center"
     grid = blank_grid(profile)
@@ -741,7 +753,7 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
             place_line(grid, row_idx, title, align="center")
         row_idx += 1
     if subtitle and title and row_idx < profile.rows:
-        place_subtitle_row(grid, row_idx, subtitle, title_color or Color.WHITE)
+        place_subtitle_row(grid, row_idx, subtitle, _lead_color(title_color))
         row_idx += 1
     if separator and row_idx < profile.rows:
         place_separator(grid, row_idx, separator)
@@ -882,7 +894,7 @@ def format_field(key: str, value: Any, profile: BoardProfile, style: dict | None
     return label, formatted, color
 
 
-def render_data(profile: BoardProfile, payload: dict[str, Any] | list[dict[str, Any]], title: str | None = None, title_color: Color | None = None, subtitle: str | None = None, valign: str = "top", align: str | None = None, separator: str | None = None) -> RenderedMessage:
+def render_data(profile: BoardProfile, payload: dict[str, Any] | list[dict[str, Any]], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, valign: str = "top", align: str | None = None, separator: str | None = None) -> RenderedMessage:
     """Unified renderer for structured data. Accepts a dict (label/value rows) or
     a list of dicts (columnar table). Applies _pct/_curr suffix formatting and
     color indicators to all fields regardless of layout."""
@@ -891,7 +903,7 @@ def render_data(profile: BoardProfile, payload: dict[str, Any] | list[dict[str, 
     return render_metrics(profile, payload, title=title, title_color=title_color, subtitle=subtitle, valign=valign, align=align or "left", separator=separator)
 
 
-def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None, title_color: Color | None = None, subtitle: str | None = None, valign: str = "top", align: str = "left", separator: str | None = None) -> RenderedMessage:
+def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, valign: str = "top", align: str = "left", separator: str | None = None) -> RenderedMessage:
     style = data.get("_style") if isinstance(data.get("_style"), dict) else None
     entries = []
     for key, value in data.items():
@@ -914,7 +926,7 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
             place_line(grid, row, title, align="center")
         row += 1
     if subtitle and title and row < profile.rows:
-        place_subtitle_row(grid, row, subtitle, title_color or Color.WHITE)
+        place_subtitle_row(grid, row, subtitle, _lead_color(title_color))
         row += 1
     if separator and row < profile.rows:
         place_separator(grid, row, separator)
@@ -961,7 +973,7 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
     return RenderedMessage(profile=profile, grid=grid)
 
 
-def render_auto(profile: BoardProfile, payload: Any, title: str | None = None, title_color: Color | None = None, subtitle: str | None = None, align: str | None = None, valign: str = "top", separator: str | None = None) -> RenderedMessage:
+def render_auto(profile: BoardProfile, payload: Any, title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, align: str | None = None, valign: str = "top", separator: str | None = None) -> RenderedMessage:
     """Infer the best renderer from the payload type and content."""
     if isinstance(payload, str):
         return render_text(profile, payload, valign=valign)
@@ -1199,7 +1211,7 @@ def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: boo
 # -----------------------------------------------------------------------------
 
 
-def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top", align: str | None = None, title_color: Color | None = None, subtitle: str | None = None, tz: str | None = None, columns: int = 1, separator: str | None = None) -> RenderedMessage:
+def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top", align: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, tz: str | None = None, columns: int = 1, separator: str | None = None) -> RenderedMessage:
     # A newline in the title splits it: first line → title, second line → subtitle
     # (only when no explicit subtitle was provided).
     if title and "\n" in title:
@@ -1253,7 +1265,7 @@ def cli(argv: list[str] | None = None) -> int:
         p.add_argument("--cell-width", type=int, default=2, help="Terminal preview width per board cell")
         p.add_argument("--no-ansi", action="store_true", help="Disable ANSI color in terminal preview")
         p.add_argument("--title")
-        p.add_argument("--title-color", default="white", metavar="COLOR", help="Color of title bookend tiles (default: white). Accepts tone names: white, green, red, yellow, orange, blue, violet, none (plain centered title, no tiles)")
+        p.add_argument("--title-color", default="white", metavar="COLOR", help="Color(s) of title bookend tiles (default: white). Single name or up to 3 comma-separated colors (e.g. red,blue,orange — right side mirrors left). Use 'none' for plain centered title with no tiles.")
         p.add_argument("--subtitle", metavar="TEXT|time", help="Optional subtitle row below title. Use 'time' for current time")
         p.add_argument("--columns", type=int, choices=[1, 2], default=1, help="Number of key-value pairs per row (kv template only, default: 1)")
         p.add_argument("--input", default="-", help="Path to input file, or - for stdin")
@@ -1310,7 +1322,14 @@ def cli(argv: list[str] | None = None) -> int:
 
     profile = PROFILES[args.profile]
     payload = load_payload(args.input)
-    title_color = None if not args.title or args.title_color.lower() == "none" else tone_to_color(args.title_color)
+    if not args.title or args.title_color.lower() == "none":
+        title_color: Color | list[Color] | None = None
+    else:
+        _tc_parts = [p.strip() for p in args.title_color.split(",")]
+        if len(_tc_parts) == 1:
+            title_color = tone_to_color(_tc_parts[0])
+        else:
+            title_color = [tone_to_color(p) or Color.WHITE for p in _tc_parts[:3]]
     message = build_message(profile, args.template, payload, args.title, valign=args.valign, align=args.align, title_color=title_color, subtitle=getattr(args, "subtitle", None), tz=args.tz, columns=args.columns, separator=getattr(args, "separator", None))
 
     if getattr(args, "force_timestamp", False) or getattr(args, "timestamp", False):
