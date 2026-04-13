@@ -1,5 +1,5 @@
 [project]
-name = "vesta"
+name = "vestaboard-tools"
 version = "0.1.0"
 description = "Formatter, previewer, and publisher for Vestaboard devices"
 readme = "README.md"
