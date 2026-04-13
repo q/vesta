@@ -104,9 +104,9 @@ cat metrics.json | vesta render --template data --preview-only --explain
 
 Adds a title row at the top with colored tile bookends. Tries 2 tiles each side, falls back to 1 if the text is long.
 
-**`--title-color COLOR|none`**
+**`--title-color COLOR[,COLOR,COLOR]|none`**
 
-Color of the bookend tiles. Defaults to `white`. Pass `none` for a plain centered title with no tiles.
+Color of the bookend tiles. Defaults to `white`. Pass `none` for a plain centered title with no tiles. Pass up to 3 comma-separated colors to use multiple tiles — the right side mirrors the left: `--title-color red,blue,orange` places `red blue orange` on the left and `orange blue red` on the right. Falls back through fewer tiles if the title text is too long to fit.
 
 **`--subtitle TEXT|time`**
 
