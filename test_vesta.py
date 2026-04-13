@@ -953,5 +953,114 @@ class TestLoadPayload(unittest.TestCase):
         self.assertEqual(csv_msg.grid, json_msg.grid)
 
 
+class TestNoteEdgeCases(unittest.TestCase):
+    # ---- long labels on 15-col grid (narrow single-col path) ----
+
+    def test_long_label_truncated_to_fit_note(self):
+        # Label wider than 14 chars must not crash and grid dims must be correct.
+        long_label = "averylonglabelname"  # 18 chars > 14
+        msg = render_kv(NOTE, {long_label: 42})
+        self.assertEqual(len(msg.grid), NOTE.rows)
+        self.assertEqual(len(msg.grid[0]), NOTE.cols)
+
+    def test_long_label_row_width_not_exceeded(self):
+        long_label = "x" * 20
+        msg = render_kv(NOTE, {long_label: "val"})
+        for row in msg.grid:
+            self.assertEqual(len(row), NOTE.cols)
+
+    def test_long_value_truncated_to_fit_note(self):
+        long_value = "a" * 30  # 30 chars > 15
+        msg = render_kv(NOTE, {"key": long_value})
+        self.assertEqual(len(msg.grid), NOTE.rows)
+        # Value row (row 1) must not spill past board width.
+        self.assertEqual(len(msg.grid[1]), NOTE.cols)
+
+    # ---- timestamp on NOTE ----
+
+    def test_timestamp_placed_on_note_when_last_row_empty(self):
+        # 1 kv pair on NOTE uses rows 0 and 1; row 2 is blank → timestamp fits.
+        msg = render_kv(NOTE, {"temp": 72})
+        last_before = list(msg.grid[-1])
+        msg = place_timestamp(msg)
+        self.assertNotEqual(msg.grid[-1], last_before)
+
+    def test_timestamp_skipped_on_note_when_last_row_full(self):
+        # With a title + 1 kv pair: title→row0, label→row1, value right-aligned→row2.
+        # The value occupies the rightmost cell, which blocks the timestamp buffer.
+        msg = render_kv(NOTE, {"a": 1}, title="T")
+        last_before = list(msg.grid[-1])
+        msg = place_timestamp(msg)
+        self.assertEqual(msg.grid[-1], last_before)
+
+    def test_force_timestamp_on_note_overwrites(self):
+        msg = render_kv(NOTE, {"a": 1, "b": 2})
+        last_before = list(msg.grid[-1])
+        msg = place_timestamp(msg, force=True)
+        self.assertNotEqual(msg.grid[-1], last_before)
+
+    def test_timestamp_right_aligned_on_note(self):
+        msg = render_kv(NOTE, {"temp": 72})
+        msg = place_timestamp(msg)
+        self.assertNotEqual(msg.grid[-1][-1], " ")
+
+    # ---- many-column table on NOTE (column dropping) ----
+
+    def test_note_table_drops_excess_columns(self):
+        # 5 plain columns on NOTE (15 cols, no color reserve).
+        # n=4: (15-3)//4 = 3 >= 3 → fits; n=5: (15-4)//5 = 2 < 3 → drop.
+        rows = [{"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}]
+        import sys
+        stderr_capture = io.StringIO()
+        orig = sys.stderr
+        sys.stderr = stderr_capture
+        try:
+            msg = render_table(NOTE, rows)
+        finally:
+            sys.stderr = orig
+        self.assertIn("dropped", stderr_capture.getvalue())
+        self.assertEqual(len(msg.grid), NOTE.rows)
+
+    def test_note_table_dropped_column_warning_names_column(self):
+        rows = [{"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}]
+        import sys
+        stderr_capture = io.StringIO()
+        orig = sys.stderr
+        sys.stderr = stderr_capture
+        try:
+            render_table(NOTE, rows)
+        finally:
+            sys.stderr = orig
+        warning = stderr_capture.getvalue()
+        # The dropped column(s) should be named in the warning.
+        self.assertIn("e", warning)
+
+    def test_note_table_with_color_col_drops_at_four(self):
+        # With a change_pct col (triggers color reserve → available=14),
+        # n=4: (14-3)//4 = 2 < 3 → only 3 columns fit.
+        rows = [{"a": 1, "b": 2, "c": 3, "change_pct": 0.5}]
+        import sys
+        stderr_capture = io.StringIO()
+        orig = sys.stderr
+        sys.stderr = stderr_capture
+        try:
+            msg = render_table(NOTE, rows)
+        finally:
+            sys.stderr = orig
+        self.assertIn("dropped", stderr_capture.getvalue())
+
+    def test_note_table_two_columns_fit_without_warning(self):
+        rows = [{"name": "alice", "score": 10}]
+        import sys
+        stderr_capture = io.StringIO()
+        orig = sys.stderr
+        sys.stderr = stderr_capture
+        try:
+            render_table(NOTE, rows)
+        finally:
+            sys.stderr = orig
+        self.assertEqual(stderr_capture.getvalue(), "")
+
+
 if __name__ == "__main__":
     unittest.main()
