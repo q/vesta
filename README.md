@@ -85,8 +85,8 @@ Use `"none"` to suppress the color tile on a specific field:
 
 ```json
 {
-  "net_change": 0,
-  "_style": { "net_change": "none" }
+  "delta": 0,
+  "_style": { "delta": "none" }
 }
 ```
 
