@@ -129,7 +129,7 @@ Adds a full-width row of colored tiles below the title block (after subtitle if 
 | `red,black` | alternating colors |
 
 ```bash
-echo '{"temp":"68F","hum":"42%","co2":"820","noise":"38"}' | \
+echo '{"temp":"68F","hum_pct":42,"co2":"820","noise":"38"}' | \
   vesta render --template kv --title "HOME" --separator rainbow --preview-only
 ```
 
@@ -137,15 +137,15 @@ echo '{"temp":"68F","hum":"42%","co2":"820","noise":"38"}' | \
 ┌────────────── flagship 6x22 ───────────────┐
 │████              H O M E               ████│
 │████████████████████████████████████████████│
-│T E M P                               6 8 F │
-│H U M                                 4 2 % │
-│C O 2                                 8 2 0 │
-│N O I S E                               3 8 │
+│T E M P                             6 8 F   │
+│H U M                               4 2 % ██│
+│C O 2                               8 2 0   │
+│N O I S E                             3 8   │
 └────────────────────────────────────────────┘
 ```
 
 ```bash
-vesta render --input testdata/home.json --template kv --columns 2 \
+vesta render --input testdata/home.json --columns 2 \
   --title "HOME" --title-color white --subtitle time --preview-only
 ```
 
@@ -153,26 +153,26 @@ vesta render --input testdata/home.json --template kv --columns 2 \
 ┌────────────── flagship 6x22 ───────────────┐
 │████              H O M E               ████│
 │██              1 2 : 0 9 A               ██│
-│T E M P       6 8 F       H U M       4 2 % │
-│C O 2         8 2 0       N O I S E     3 8 │
-│D O O R S   S H U T       L I G H T     O N │
-│H E A T       O F F       F A N S       O N │
+│T E M P       6 8 F     H U M       4 2 % ██│
+│C O 2         8 2 0     N O I S E     3 8   │
+│D O O R S   S H U T     L I G H T     O N   │
+│H E A T       O F F     F A N S       O N   │
 └────────────────────────────────────────────┘
 ```
 
-**`--columns [1|2]`** *(kv template only)*
+**`--columns [1|2]`** *(kv layout)*
 
-Pack two key-value pairs per row instead of one. Each column is sized independently to its own content, which creates a natural gap between columns. Color indicators from `_style` or auto-detection still apply: left-column tiles appear in the gap; right-column tiles appear at the board's right edge.
+Pack two key-value pairs per row instead of one. Each column is sized independently to its own content, which creates a natural gap between columns. Color indicators from `_style` or auto-detection still apply: left-column tiles appear in the gap; right-column tiles appear at the board's right edge. When using `auto` template (the default), passing `--columns 2` with a JSON object automatically selects kv layout.
 
 ```bash
-echo '{"now":"62F","rain":"0%","high":"66F","low":"48F"}' | \
-  vesta render --template kv --columns 2 --preview-only
+echo '{"now":"62F","rain_pct":0,"high":"66F","low":"48F"}' | \
+  vesta render --columns 2 --preview-only
 ```
 
 ```
 ┌────────────── flagship 6x22 ───────────────┐
-│N O W     6 2 F             R A I N     0 % │
-│H I G H   6 6 F             L O W     4 8 F │
+│N O W     6 2 F           R A I N     0 % ██│
+│H I G H   6 6 F           L O W     4 8 F   │
 │                                            │
 │                                            │
 │                                            │
@@ -243,7 +243,7 @@ echo '{"temp": "72F", "wind": "12mph"}' | vesta render --template kv --preview-o
 **Key/value 2-col with title:**
 
 ```bash
-vesta render --input testdata/home.json --template kv --columns 2 \
+vesta render --input testdata/home.json --columns 2 \
   --title "HOME" --subtitle time --preview-only
 ```
 
@@ -251,10 +251,10 @@ vesta render --input testdata/home.json --template kv --columns 2 \
 ┌────────────── flagship 6x22 ───────────────┐
 │████              H O M E               ████│
 │██              1 2 : 0 9 A               ██│
-│T E M P       6 8 F       H U M       4 2 % │
-│C O 2         8 2 0       N O I S E     3 8 │
-│D O O R S   S H U T       L I G H T     O N │
-│H E A T       O F F       F A N S       O N │
+│T E M P       6 8 F     H U M       4 2 % ██│
+│C O 2         8 2 0     N O I S E     3 8   │
+│D O O R S   S H U T     L I G H T     O N   │
+│H E A T       O F F     F A N S       O N   │
 └────────────────────────────────────────────┘
 ```
 

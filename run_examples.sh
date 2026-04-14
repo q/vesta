@@ -45,10 +45,10 @@ run "title + subtitle time" \
   "uv run vesta.py render --input testdata/metrics_styled.json --template data --title 'DAILY METRICS' --title-color violet --subtitle time --valign center --preview-only"
 
 run "kv 2-col layout (home)" \
-  "uv run vesta.py render --input testdata/home.json --template kv --columns 2 --preview-only"
+  "uv run vesta.py render --input testdata/home.json --columns 2 --preview-only"
 
 run "kv 2-col with title and subtitle (home)" \
-  "uv run vesta.py render --input testdata/home.json --template kv --columns 2 --title 'HOME' --subtitle time --preview-only"
+  "uv run vesta.py render --input testdata/home.json --columns 2 --title 'HOME' --subtitle time --preview-only"
 
 run "server metrics with color indicators" \
   "uv run vesta.py render --input testdata/server.json --template data --valign center --align center --explain --preview-only"

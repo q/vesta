@@ -1,6 +1,6 @@
 {
   "temp": "68F",
-  "hum": "42%",
+  "hum_pct": 42,
   "co2": "820",
   "noise": "38",
   "doors": "shut",
