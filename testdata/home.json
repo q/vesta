@@ -6,8 +6,5 @@
   "doors": "shut",
   "light": "on",
   "heat": "off",
-  "fans": "on",
-  "_style": {
-    "hum_pct": "none"
-  }
+  "fans": "on"
 }

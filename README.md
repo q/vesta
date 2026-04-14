@@ -81,12 +81,12 @@ Color is driven by semantic tone, not raw cell placement. The trailing colored t
 Accepted tone names: `good`, `bad`, `warn`, `info`, `neutral`, `muted`,
 or a direct color: `green`, `red`, `yellow`, `blue`, `white`, `black`, `violet`, `orange`.
 
-Use `"none"` to suppress the color tile entirely — useful when auto-detection fires on a field that is a measurement rather than a directional metric:
+Use `"none"` to suppress the color tile on a specific field:
 
 ```json
 {
-  "hum_pct": 42,
-  "_style": { "hum_pct": "none" }
+  "net_change": 0,
+  "_style": { "net_change": "none" }
 }
 ```
 
@@ -140,7 +140,7 @@ Adds a full-width row of colored tiles below the title block (after subtitle if 
 | `red,black` | alternating colors |
 
 ```bash
-echo '{"temp":"68F","hum_pct":42,"co2":"820","noise":"38","_style":{"hum_pct":"none"}}' | \
+echo '{"temp":"68F","hum_pct":42,"co2":"820","noise":"38"}' | \
   vesta render --template kv --title "HOME" --separator rainbow --preview-only
 ```
 
@@ -176,7 +176,7 @@ vesta render --input testdata/home.json --columns 2 \
 Pack two key-value pairs per row instead of one. Each column is sized independently to its own content, which creates a natural gap between columns. Color indicators from `_style` or auto-detection still apply: left-column tiles appear in the gap; right-column tiles appear at the board's right edge. When using `auto` template (the default), passing `--columns 2` with a JSON object automatically selects kv layout.
 
 ```bash
-echo '{"now":"62F","rain_pct":0,"high":"66F","low":"48F","_style":{"rain_pct":"none"}}' | \
+echo '{"now":"62F","rain_pct":0,"high":"66F","low":"48F"}' | \
   vesta render --columns 2 --preview-only
 ```
 
