@@ -217,6 +217,22 @@ class TestTone(unittest.TestCase):
         data = {"revenue": 1000, "_style": {"revenue": "bad"}}
         self.assertEqual(resolve_tone(data, "revenue", 1000), "bad")
 
+    def test_signed_positive_is_good(self):
+        data = {"margin_pct": 4.2, "_style": {"margin_pct": "signed"}}
+        self.assertEqual(resolve_tone(data, "margin_pct", 4.2), "good")
+
+    def test_signed_negative_is_bad(self):
+        data = {"margin_pct": -1.8, "_style": {"margin_pct": "signed"}}
+        self.assertEqual(resolve_tone(data, "margin_pct", -1.8), "bad")
+
+    def test_signed_zero_is_neutral(self):
+        data = {"margin_pct": 0, "_style": {"margin_pct": "signed"}}
+        self.assertEqual(resolve_tone(data, "margin_pct", 0), "neutral")
+
+    def test_signed_string_value(self):
+        data = {"margin_pct": "3.5%", "_style": {"margin_pct": "signed"}}
+        self.assertEqual(resolve_tone(data, "margin_pct", "3.5%"), "good")
+
     def test_style_override_dict(self):
         data = {"revenue": 1000, "_style": {"revenue": {"tone": "warn"}}}
         self.assertEqual(resolve_tone(data, "revenue", 1000), "warn")

@@ -635,7 +635,25 @@ def resolve_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
     if isinstance(style, dict) and key in style:
         override = style[key]
         if isinstance(override, str):
-            return override.lower()
+            tone = override.lower()
+            if tone == "signed":
+                # Sign-based: positive → good, negative → bad, zero → neutral.
+                n: float | None = None
+                if isinstance(value, (int, float)):
+                    n = float(value)
+                elif isinstance(value, str):
+                    try:
+                        n = float(value.rstrip("%").strip())
+                    except ValueError:
+                        pass
+                if n is None:
+                    return None
+                if n > 0:
+                    return "good"
+                if n < 0:
+                    return "bad"
+                return "neutral"
+            return tone
         if isinstance(override, dict):
             # Range-based: {"good": <threshold>, "bad": <threshold>}
             if "good" in override and "bad" in override and isinstance(value, (int, float)):

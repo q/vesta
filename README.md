@@ -83,6 +83,15 @@ Color is driven by semantic tone, not raw cell placement. The trailing colored t
 Accepted tone names: `good`, `bad`, `warn`, `info`, `neutral`, `muted`,
 or a direct color: `green`, `red`, `yellow`, `blue`, `white`, `black`, `violet`, `orange`.
 
+Use `"signed"` for sign-based coloring — positive → green, negative → red, zero → white. Useful for percentage fields that aren't named with `change`/`delta`/`diff`:
+
+```json
+{
+  "margin_pct": 4.2,
+  "_style": { "margin_pct": "signed" }
+}
+```
+
 Use `"none"` to suppress the color tile on a specific field:
 
 ```json
