@@ -97,7 +97,10 @@ TONE_TO_COLOR: dict[str, Color] = {
     "white": Color.WHITE,
     "black": Color.BLACK,
     "violet": Color.VIOLET,
+    "purple": Color.VIOLET,
     "orange": Color.ORANGE,
+    "grey": Color.BLACK,
+    "gray": Color.BLACK,
 }
 
 
@@ -1382,9 +1385,21 @@ def cli(argv: list[str] | None = None) -> int:
         _tc_parts = [p.strip() for p in args.title_color.split(",")]
         if len(_tc_parts) == 1:
             title_color = tone_to_color(_tc_parts[0])
+            if title_color is None:
+                print(f"warning: unknown color '{_tc_parts[0]}' for --title-color, using white", file=sys.stderr)
+                title_color = Color.WHITE
         else:
-            title_color = [tone_to_color(p) or Color.WHITE for p in _tc_parts[:3]]
+            title_color = []
+            for _p in _tc_parts[:3]:
+                _c = tone_to_color(_p)
+                if _c is None:
+                    print(f"warning: unknown color '{_p}' for --title-color, using white", file=sys.stderr)
+                    _c = Color.WHITE
+                title_color.append(_c)
     _sc_raw = getattr(args, "subtitle_color", None)
+    if _sc_raw and _sc_raw.lower() != "none" and tone_to_color(_sc_raw) is None:
+        print(f"warning: unknown color '{_sc_raw}' for --subtitle-color, ignoring", file=sys.stderr)
+        _sc_raw = None
     subtitle_color: Color | list[Color] | None = tone_to_color(_sc_raw) if _sc_raw else None
     message = build_message(profile, args.template, payload, args.title, valign=args.valign, align=args.align, title_color=title_color, subtitle=getattr(args, "subtitle", None), subtitle_color=subtitle_color, tz=args.tz, columns=args.columns, separator=getattr(args, "separator", None))
 
