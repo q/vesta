@@ -27,22 +27,22 @@ run "JSON table" \
   "uv run vesta.py render --input testdata/table.json --preview-only"
 
 run "metrics (plain)" \
-  "uv run vesta.py render --input testdata/metrics.json --template data --preview-only"
+  "uv run vesta.py render --input testdata/metrics.json --preview-only"
 
 run "metrics with color indicators (file)" \
-  "uv run vesta.py render --input testdata/metrics_styled.json --template data --valign center --align center --timestamp --preview-only --explain"
+  "uv run vesta.py render --input testdata/metrics_styled.json --valign center --align center --timestamp --preview-only --explain"
 
 run "note profile" \
-  "uv run vesta.py render --input testdata/metrics_note.json --profile note --template data --preview-only"
+  "uv run vesta.py render --input testdata/metrics_note.json --profile note --preview-only"
 
 run "json output" \
   "echo '\"hello world\"' | uv run vesta.py render --json-only"
 
 run "title with bookend tiles" \
-  "uv run vesta.py render --input testdata/metrics.json --template data --title 'DAILY METRICS' --preview-only"
+  "uv run vesta.py render --input testdata/metrics.json --title 'DAILY METRICS' --preview-only"
 
 run "title + subtitle time" \
-  "uv run vesta.py render --input testdata/metrics_styled.json --template data --title 'DAILY METRICS' --title-color violet --subtitle time --valign center --preview-only"
+  "uv run vesta.py render --input testdata/metrics_styled.json --title 'DAILY METRICS' --title-color violet --subtitle time --valign center --preview-only"
 
 run "kv 2-col layout (home)" \
   "uv run vesta.py render --input testdata/home.json --columns 2 --preview-only"
@@ -51,7 +51,7 @@ run "kv 2-col with title and subtitle (home)" \
   "uv run vesta.py render --input testdata/home.json --columns 2 --title 'HOME' --subtitle time --preview-only"
 
 run "server metrics with color indicators" \
-  "uv run vesta.py render --input testdata/server.json --template data --valign center --align center --explain --preview-only"
+  "uv run vesta.py render --input testdata/server.json --valign center --align center --explain --preview-only"
 
 run "stocks table" \
-  "uv run vesta.py render --input testdata/stocks.json --template data --preview-only"
+  "uv run vesta.py render --input testdata/stocks.json --preview-only"

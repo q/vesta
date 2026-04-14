@@ -31,6 +31,8 @@ A small Python formatter / previewer / publisher for Vestaboard devices.
 
 `metrics` and `table` are accepted as aliases for `data`.
 
+In most cases `--template` can be omitted — `auto` selects `kv`, `data`, or `text` based on input shape. Specify `--template kv` explicitly when you want the flush-right value layout for a JSON object instead of the metrics layout.
+
 CSV is auto-detected — no `--template` flag needed.
 
 ## Key suffixes
@@ -111,7 +113,7 @@ Use `"none"` to suppress the color tile on a specific field:
 Use `--explain` to see which fields got indicators and why:
 
 ```bash
-cat metrics.json | vesta render --template data --preview-only --explain
+cat metrics.json | vesta render --preview-only --explain
 ```
 
 ## Layout flags
@@ -301,7 +303,7 @@ echo '{
     "conversion_pct": {"good": 8, "bad": 2},
     "bounce_rate_pct": {"good": 30, "bad": 80}
   }
-}' | vesta render --template data --valign center --align center --timestamp --preview-only
+}' | vesta render --valign center --align center --timestamp --preview-only
 ```
 
 ```
@@ -318,7 +320,7 @@ echo '{
 **Note profile:**
 
 ```bash
-vesta render --input testdata/metrics_note.json --profile note --template data --preview-only
+vesta render --input testdata/metrics_note.json --profile note --preview-only
 ```
 
 ```
