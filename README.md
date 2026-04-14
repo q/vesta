@@ -129,34 +129,34 @@ Adds a full-width row of colored tiles below the title block (after subtitle if 
 | `red,black` | alternating colors |
 
 ```bash
-echo '{"temp": "72F", "wind": "12mph", "humidity": "45%"}' | \
-  vesta render --template kv --title "Weather" --separator rainbow --preview-only
+echo '{"temp":"68F","hum":"42%","co2":"820","noise":"38"}' | \
+  vesta render --template kv --title "HOME" --separator rainbow --preview-only
 ```
 
 ```
 ┌────────────── flagship 6x22 ───────────────┐
-│████          W E A T H E R             ████│
+│████              H O M E               ████│
 │████████████████████████████████████████████│
-│T E M P                               7 2 F │
-│W I N D                           1 2 M P H │
-│H U M I D I T Y                       4 5 % │
-│                                            │
+│T E M P                               6 8 F │
+│H U M                                 4 2 % │
+│C O 2                                 8 2 0 │
+│N O I S E                               3 8 │
 └────────────────────────────────────────────┘
 ```
 
 ```bash
-vesta render --input weather.json --template kv --columns 2 \
-  --title "BROOKLYN WEATHER" --title-color white --subtitle time --preview-only
+vesta render --input testdata/home.json --template kv --columns 2 \
+  --title "HOME" --title-color white --subtitle time --preview-only
 ```
 
 ```
 ┌────────────── flagship 6x22 ───────────────┐
-│████  B R O O K L Y N   W E A T H E R   ████│
-│██              1 0 : 4 3 P               ██│
-│N O W     6 2 F     R A I N           0 %   │
-│L I K E   6 2 F     W I N D     1 5 M P H   │
-│H I G H   6 6 F     U V             4 . 4 ██│
-│L O W     4 8 F     S E T     7 : 3 2 P M   │
+│████              H O M E               ████│
+│██              1 2 : 0 9 A               ██│
+│T E M P       6 8 F       H U M       4 2 % │
+│C O 2         8 2 0       N O I S E     3 8 │
+│D O O R S   S H U T       L I G H T     O N │
+│H E A T       O F F       F A N S       O N │
 └────────────────────────────────────────────┘
 ```
 
@@ -243,18 +243,18 @@ echo '{"temp": "72F", "wind": "12mph"}' | vesta render --template kv --preview-o
 **Key/value 2-col with title:**
 
 ```bash
-vesta render --input testdata/weather.json --template kv --columns 2 \
-  --title "BROOKLYN WEATHER" --subtitle time --preview-only
+vesta render --input testdata/home.json --template kv --columns 2 \
+  --title "HOME" --subtitle time --preview-only
 ```
 
 ```
 ┌────────────── flagship 6x22 ───────────────┐
-│████  B R O O K L Y N   W E A T H E R   ████│
-│██              1 0 : 4 3 P               ██│
-│N O W     6 2 F     R A I N           0 %   │
-│L I K E   6 2 F     W I N D     1 5 M P H   │
-│H I G H   6 6 F     U V             4 . 4 ██│
-│L O W     4 8 F     S E T     7 : 3 2 P M   │
+│████              H O M E               ████│
+│██              1 2 : 0 9 A               ██│
+│T E M P       6 8 F       H U M       4 2 % │
+│C O 2         8 2 0       N O I S E     3 8 │
+│D O O R S   S H U T       L I G H T     O N │
+│H E A T       O F F       F A N S       O N │
 └────────────────────────────────────────────┘
 ```
 
