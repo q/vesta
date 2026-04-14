@@ -1313,6 +1313,7 @@ def build_message(profile: BoardProfile, template: str, payload: Any, title: str
 
 def cli(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Vestaboard formatter / preview / publisher")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     def add_common(p: argparse.ArgumentParser) -> None:
