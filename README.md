@@ -149,7 +149,7 @@ echo '{"temp":"68F","hum_pct":42,"co2":"820","noise":"38","_style":{"hum_pct":"n
 │T E M P                               6 8 F │
 │H U M                                 4 2 % │
 │C O 2                                 8 2 0 │
-│N O I S E                               3 8 │
+│N O I S E                           3 8 D B │
 └────────────────────────────────────────────┘
 ```
 
@@ -162,10 +162,10 @@ vesta render --input testdata/home.json --columns 2 \
 ┌────────────── flagship 6x22 ───────────────┐
 │████              H O M E               ████│
 │██              1 2 : 0 9 A               ██│
-│T E M P       6 8 F       H U M       4 2 % │
-│C O 2         8 2 0       N O I S E     3 8 │
-│D O O R S   S H U T       L I G H T     O N │
-│H E A T       O F F       F A N S       O N │
+│T E M P       6 8 F     H U M         4 2 % │
+│C O 2         8 2 0     N O I S E   3 8 D B │
+│D O O R S   S H U T     L I G H T       O N │
+│H E A T       O F F     F A N S         O N │
 └────────────────────────────────────────────┘
 ```
 
@@ -260,10 +260,10 @@ vesta render --input testdata/home.json --columns 2 \
 ┌────────────── flagship 6x22 ───────────────┐
 │████              H O M E               ████│
 │██              1 2 : 0 9 A               ██│
-│T E M P       6 8 F       H U M       4 2 % │
-│C O 2         8 2 0       N O I S E     3 8 │
-│D O O R S   S H U T       L I G H T     O N │
-│H E A T       O F F       F A N S       O N │
+│T E M P       6 8 F     H U M         4 2 % │
+│C O 2         8 2 0     N O I S E   3 8 D B │
+│D O O R S   S H U T     L I G H T       O N │
+│H E A T       O F F     F A N S         O N │
 └────────────────────────────────────────────┘
 ```
 
