@@ -184,9 +184,14 @@ class TestDatetimeCompaction(unittest.TestCase):
 
 
 class TestTone(unittest.TestCase):
-    def test_positive_pct_is_good(self):
+    def test_positive_pct_no_auto_tone(self):
+        # _pct suffix only formats the value; it does not trigger auto-detection
         data = {"price_pct": 5.2}
-        self.assertEqual(resolve_tone(data, "price_pct", 5.2), "good")
+        self.assertIsNone(resolve_tone(data, "price_pct", 5.2))
+
+    def test_positive_change_pct_is_good(self):
+        data = {"price_change_pct": 5.2}
+        self.assertEqual(resolve_tone(data, "price_change_pct", 5.2), "good")
 
     def test_negative_change_is_bad(self):
         data = {"price_change": -3.1}
@@ -413,15 +418,21 @@ class TestRenderMetrics(unittest.TestCase):
         all_chars = [cell for row in msg.grid for cell in row if isinstance(cell, str)]
         self.assertNotIn("_STYLE", "".join(all_chars))
 
-    def test_color_indicator_right_edge_on_positive_pct(self):
-        msg = render_metrics(FLAGSHIP, {"score_pct": 10.0})
+    def test_color_indicator_right_edge_on_positive_change(self):
+        msg = render_metrics(FLAGSHIP, {"score_change": 10.0})
         color_cells = [row[-1] for row in msg.grid if isinstance(row[-1], Color)]
         self.assertTrue(any(c == Color.GREEN for c in color_cells))
 
-    def test_color_indicator_red_on_negative_pct(self):
-        msg = render_metrics(FLAGSHIP, {"score_pct": -5.0})
+    def test_color_indicator_red_on_negative_change(self):
+        msg = render_metrics(FLAGSHIP, {"score_change": -5.0})
         color_cells = [row[-1] for row in msg.grid if isinstance(row[-1], Color)]
         self.assertTrue(any(c == Color.RED for c in color_cells))
+
+    def test_pct_key_no_color_without_style(self):
+        # _pct alone does not auto-color; need _style or a directional word in key
+        msg = render_metrics(FLAGSHIP, {"score_pct": 10.0})
+        color_cells = [row[-1] for row in msg.grid if isinstance(row[-1], Color)]
+        self.assertEqual(color_cells, [])
 
     def test_no_indicator_for_plain_field(self):
         msg = render_metrics(FLAGSHIP, {"score": 95})
@@ -447,7 +458,7 @@ class TestRenderMetrics(unittest.TestCase):
         self.assertTrue(all(isinstance(v, int) for row in chars for v in row))
 
     def test_color_code_in_characters(self):
-        msg = render_metrics(FLAGSHIP, {"score_pct": 5.0})
+        msg = render_metrics(FLAGSHIP, {"score_change": 5.0})
         chars = msg.to_characters()
         # Color.GREEN = 66 should appear somewhere in the right-most column
         right_col = [row[-1] for row in chars]
@@ -676,8 +687,8 @@ class TestRenderKv(unittest.TestCase):
             self.assertEqual(chars, [], f"row {r} should be blank with 1 item")
 
     def test_columns_2_right_color_tile_at_right_edge(self):
-        # Auto-detected pct field in right column → color tile at col 21 (right edge).
-        msg = render_kv(FLAGSHIP, {"a": 1, "growth_pct": 5.0}, columns=2)
+        # Auto-detected change field in right column → color tile at col 21 (right edge).
+        msg = render_kv(FLAGSHIP, {"a": 1, "growth_change": 5.0}, columns=2)
         self.assertIsInstance(msg.grid[0][-1], Color)
 
     def test_columns_2_no_color_tiles_without_style(self):
@@ -690,11 +701,14 @@ class TestRenderKv(unittest.TestCase):
         # When content fills the board, the gap between columns is trimmed to 1.
         # The left-column color tile must still appear at position left_pw even
         # when gap == 1 (it sits in the single gap cell, not overwriting the right label).
-        # score_pct → label "SCORE" (5) + value "5%" (2) → left_pw = 8
-        # "note" (4) + "x"*10 (10) → right_pw = 15; 8+15=23 > 22 → trim → gap = 1
-        msg = render_kv(FLAGSHIP, {"score_pct": 5.0, "note": "x" * 10}, columns=2)
-        self.assertIsInstance(msg.grid[0][8], Color)  # tile at left_pw = 8
-        self.assertIsInstance(msg.grid[0][9], str)    # right label starts at left_pw+1, not overwritten
+        # score_change → label "SCORE CHANGE" (12) + value "5" (1) → left_pw = 14
+        # "note" (4) + "x"*10 (10) → right_pw = 15; 14+15=29 > 22 → trim → gap = 1
+        # Actually use score_delta (11) + "5" (1) → left_pw = 13; 13+15=28 > 22 → trim
+        # Use "chg" (3) + value "5" (1) → too small; use "ab_change" (9) + "5" (1) = 11
+        # left_pw = 9+1+1 = 11; right_pw = 4+1+8 = 13 (trimmed); gap = max(1, 22-11-13) = 1
+        msg = render_kv(FLAGSHIP, {"ab_change": 5.0, "note": "x" * 10}, columns=2)
+        self.assertIsInstance(msg.grid[0][11], Color)  # tile at left_pw = 11
+        self.assertIsInstance(msg.grid[0][12], str)    # right label starts at left_pw+1, not overwritten
 
     def test_columns_2_fallback_when_content_too_wide(self):
         # Left pair width alone exceeds note profile; should fall back to 1-col with a warning.
@@ -1003,11 +1017,11 @@ class TestPreview(unittest.TestCase):
         self.assertIn("flagship", msg.preview(ansi_color=False))
 
     def test_no_ansi_no_escape_sequences(self):
-        msg = render_metrics(FLAGSHIP, {"score_pct": 5.0})
+        msg = render_metrics(FLAGSHIP, {"score_change": 5.0})
         self.assertNotIn("\033[", msg.preview(ansi_color=False))
 
     def test_ansi_enabled_has_escape_sequences(self):
-        msg = render_metrics(FLAGSHIP, {"score_pct": 5.0})
+        msg = render_metrics(FLAGSHIP, {"score_change": 5.0})
         self.assertIn("\033[", msg.preview(ansi_color=True))
 
     def test_flagship_line_count(self):

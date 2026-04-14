@@ -62,10 +62,12 @@ GROWTH    12.4% ██
 
 Color is driven by semantic tone, not raw cell placement. The trailing colored tile is added automatically when a tone can be determined.
 
-**Auto-detection:** inferred when a field name contains `pct`, `percent`, `change`, `delta`, or `diff` and the value is numeric:
+**Auto-detection:** inferred when a field name contains `change`, `delta`, or `diff` and the value is numeric:
 - positive → green
 - negative → red
 - zero → white
+
+`_pct` / `_percent` control value formatting only (appends `%`) — they do not trigger auto-detection. Use `_style` to add color to percentage fields explicitly.
 
 **Explicit tone:** set via `_style`:
 

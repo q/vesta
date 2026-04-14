@@ -570,8 +570,9 @@ def infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: in
 # -----------------------------------------------------------------------------
 # Tone resolution
 # NOTE: Experimental. Tones drive the trailing color indicator in render_metrics.
-# Auto-detection uses key name heuristics (pct/percent/change/delta/diff →
-# positive/negative). Callers can override per-field via _style in their input.
+# Auto-detection uses key name heuristics (change/delta/diff → positive/negative).
+# _pct/_percent only controls value formatting, not color. Use _style to add color
+# to percentage fields explicitly. Callers can override per-field via _style.
 # Range-based coloring: {"good": <threshold>, "bad": <threshold>} maps a value
 # to a 4-step green→yellow→orange→red gradient. Direction is implicit — wherever
 # "good" sits numerically is the green end.
@@ -612,7 +613,7 @@ def resolve_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
     # Try to coerce string values to float (strip trailing % if present) so that
     # "42" and "42%" behave the same as 42 when the key signals a percentage/change.
     lower_key = key.lower()
-    if any(p in lower_key for p in ("pct", "percent", "change", "delta", "diff")):
+    if any(p in lower_key for p in ("change", "delta", "diff")):
         n: float | None = None
         if isinstance(value, (int, float)):
             n = float(value)
