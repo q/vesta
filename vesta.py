@@ -400,6 +400,20 @@ def format_scalar(value: Any) -> str:
     return str(value)
 
 
+_PCT_SUFFIXES = ("_pct", "_percent")
+_CURR_SUFFIXES = ("_curr",)
+
+
+def key_is_pct(key: str) -> bool:
+    lower = key.lower()
+    return any(lower.endswith(s) for s in _PCT_SUFFIXES)
+
+
+def key_is_curr(key: str) -> bool:
+    lower = key.lower()
+    return any(lower.endswith(s) for s in _CURR_SUFFIXES)
+
+
 def prettify_label(key: str) -> str:
     label = normalize_text(key)
     # Strip trailing suffixes where the formatting carries the meaning.
@@ -593,7 +607,9 @@ def resolve_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
         n: float | None = None
         if isinstance(value, (int, float)):
             n = float(value)
-        elif isinstance(value, str):
+        elif isinstance(value, str) and key_is_pct(key):
+            # Coerce string values only for explicit _pct/_percent suffix keys —
+            # "42" and "42%" are unambiguously percentages when the key declares it.
             try:
                 n = float(value.rstrip("%").strip())
             except ValueError:
@@ -633,11 +649,12 @@ def render_text(profile: BoardProfile, text: str, align: str = "center", valign:
 
 
 def _kv_format_value(key: str, value: Any) -> str:
-    """Format a kv value, appending % for _pct/_percent keys when missing."""
-    lower = key.lower()
+    """Format a kv value, appending % for _pct keys or $ for _curr keys when missing."""
     s = normalize_text(format_scalar(value))
-    if any(lower.endswith(x) for x in ("_pct", "_percent")) and not s.endswith("%"):
+    if key_is_pct(key) and not s.endswith("%"):
         return s + "%"
+    if key_is_curr(key) and not s.startswith("$"):
+        return "$" + s
     return s
 
 
@@ -903,9 +920,8 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
 def format_field(key: str, value: Any, profile: BoardProfile, style: dict | None = None) -> tuple[str, str, Color | None]:
     """Shared field formatting: returns (label, formatted_value, color).
     Applies suffix conventions (_pct, _curr), value formatting, and tone resolution."""
-    lower_key = key.lower()
-    is_pct = any(lower_key.endswith(s) for s in ("_pct", "_percent", "pct", "percent"))
-    is_curr = lower_key.endswith("_curr")
+    is_pct = key_is_pct(key)
+    is_curr = key_is_curr(key)
     if isinstance(value, (int, float)):
         kind = "percent" if is_pct else "currency" if is_curr else "auto"
     elif is_pct:
