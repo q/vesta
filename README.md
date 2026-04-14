@@ -4,6 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/vestaboard-tools)](https://pypi.org/project/vestaboard-tools/)
 [![Python](https://img.shields.io/pypi/pyversions/vestaboard-tools)](https://pypi.org/project/vestaboard-tools/)
 [![License](https://img.shields.io/github/license/q/vesta)](LICENSE)
+[![Website](https://img.shields.io/badge/website-vestaboard.tools-blue)](https://vestaboard.tools)
 
 A small Python formatter / previewer / publisher for Vestaboard devices.
 

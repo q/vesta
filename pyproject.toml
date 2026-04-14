@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/q/vesta"
+Homepage = "https://vestaboard.tools"
 Repository = "https://github.com/q/vesta"
 
 [project.scripts]
