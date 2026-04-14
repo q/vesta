@@ -1,5 +1,8 @@
 # vesta
 
+[![CI](https://github.com/q/vesta/actions/workflows/ci.yml/badge.svg)](https://github.com/q/vesta/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/vestaboard-tools)](https://pypi.org/project/vestaboard-tools/)
+
 A small Python formatter / previewer / publisher for Vestaboard devices.
 
 **semantic input → board layout → terminal preview → optional publish**
@@ -359,7 +362,7 @@ Runs all bundled examples against local test data. Requires no API credentials.
 ## Installation
 
 ```bash
-pip install vesta
+pip install vestaboard-tools
 ```
 
 Or run directly from source with [uv](https://github.com/astral-sh/uv):
