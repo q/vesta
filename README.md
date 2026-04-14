@@ -83,6 +83,7 @@ Color is driven by semantic tone, not raw cell placement. The trailing colored t
 
 Accepted tone names: `good`, `bad`, `warn`, `info`, `neutral`, `muted`,
 or a direct color: `green`, `red`, `yellow`, `blue`, `white`, `black`, `violet`, `orange`.
+Aliases: `purple` → violet, `grey`/`gray` → black.
 
 Use `"signed"` for sign-based coloring — positive → green, negative → red, zero → white. Useful for percentage fields that aren't named with `change`/`delta`/`diff`:
 
