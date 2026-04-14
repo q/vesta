@@ -25,7 +25,7 @@ A small Python formatter / previewer / publisher for Vestaboard devices.
 | Template | Input | Behaviour |
 |----------|-------|-----------|
 | `text` | string | Wrapped and centered text |
-| `kv` | JSON object | Key / value rows, no formatting |
+| `kv` | JSON object | Key / value rows. Applies `_pct`/`_curr` suffix formatting; values otherwise treated as strings. |
 | `data` | JSON object or array | Label/value rows (object) or columnar table (array). Applies suffix formatting and color indicators. |
 | `auto` | any | Picks the best renderer based on input shape (default) |
 
@@ -39,7 +39,7 @@ Field name suffixes control formatting automatically. The suffix is stripped fro
 
 | Suffix | Effect |
 |--------|--------|
-| `_pct` / `_percent` | formats value as `3.2%`, adds color tone indicator |
+| `_pct` / `_percent` | formats value as `3.2%` |
 | `_curr` | formats value as `$84.2K` |
 
 ```json
@@ -55,7 +55,7 @@ Renders as:
 ```
 REVENUE   $84.2K
 SESSIONS  10.8K
-GROWTH    12.4% ██
+GROWTH    12.4%
 ```
 
 ## Color indicators
@@ -318,13 +318,13 @@ echo '{
 **Note profile:**
 
 ```bash
-vesta render --input data.json --profile note --template data --preview-only
+vesta render --input testdata/metrics_note.json --profile note --template data --preview-only
 ```
 
 ```
 ┌───────── note 3x15 ──────────┐
 │T E M P           $ 7 2 . 0 0 │
-│H U M I D I T Y       5 4 % ██│
+│H U M I D I T Y         5 4 % │
 │C H A N G E       - 2 . 1 % ██│
 └──────────────────────────────┘
 ```
