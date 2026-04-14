@@ -514,6 +514,15 @@ def format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
     if kind == "percent":
         s = normalize_text(format_scalar(value))
         return s if s.endswith("%") else s + "%"
+    if kind in ("currency", "currency_short"):
+        try:
+            n = float(str(value).lstrip("$").replace(",", "").strip())
+            if abs(n) >= 1_000:
+                return f"${compact_number(n)}"
+            return f"${n:.2f}"
+        except ValueError:
+            s = normalize_text(format_scalar(value))
+            return s if s.startswith("$") else "$" + s
         if kind == "number":
             return compact_number(n if abs(n) >= 1000 else n, decimals=2 if abs(n) < 100 else 1)
         if kind == "auto":
@@ -926,6 +935,8 @@ def format_field(key: str, value: Any, profile: BoardProfile, style: dict | None
         kind = "percent" if is_pct else "currency" if is_curr else "auto"
     elif is_pct:
         kind = "percent"
+    elif is_curr:
+        kind = "currency"
     else:
         kind = "auto"
     label = prettify_label(key)
