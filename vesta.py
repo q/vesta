@@ -585,11 +585,20 @@ def resolve_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
             if isinstance(tone, str):
                 return tone.lower()
 
-    # Auto-detect tone for numeric fields whose key name implies a change/delta.
-    if isinstance(value, (int, float)):
-        lower_key = key.lower()
-        if any(p in lower_key for p in ("pct", "percent", "change", "delta", "diff")):
+    # Auto-detect tone for fields whose key name implies a change/delta.
+    # Try to coerce string values to float (strip trailing % if present) so that
+    # "42" and "42%" behave the same as 42 when the key signals a percentage/change.
+    lower_key = key.lower()
+    if any(p in lower_key for p in ("pct", "percent", "change", "delta", "diff")):
+        n: float | None = None
+        if isinstance(value, (int, float)):
             n = float(value)
+        elif isinstance(value, str):
+            try:
+                n = float(value.rstrip("%").strip())
+            except ValueError:
+                pass
+        if n is not None:
             if n > 0:
                 return "good"
             if n < 0:
