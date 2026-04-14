@@ -128,7 +128,11 @@ Color of the bookend tiles. Defaults to `white`. Pass `none` for a plain centere
 
 **`--subtitle TEXT|time`**
 
-Optional second row below the title, with a single tile bookend on each side (same color as title). Use the special value `time` to insert the current time. You can also embed the subtitle directly in the title using a newline — `--title $'Weather\nSan Francisco'` — and the second line becomes the subtitle automatically (explicit `--subtitle` takes precedence).
+Optional second row below the title, with a single tile bookend on each side (same color as title by default). Use the special value `time` to insert the current time. You can also embed the subtitle directly in the title using a newline — `--title $'Weather\nSan Francisco'` — and the second line becomes the subtitle automatically (explicit `--subtitle` takes precedence).
+
+**`--subtitle-color COLOR`**
+
+Color of the subtitle bookend tile. Defaults to the title color. Accepts the same values as `--title-color`.
 
 **`--separator [PATTERN]`**
 
