@@ -497,6 +497,9 @@ def format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
             return f"${n:.2f}"
         if kind == "percent":
             return f"{smart_round(n, sig_figs=3)}%"
+    if kind == "percent":
+        s = normalize_text(format_scalar(value))
+        return s if s.endswith("%") else s + "%"
         if kind == "number":
             return compact_number(n if abs(n) >= 1000 else n, decimals=2 if abs(n) < 100 else 1)
         if kind == "auto":
@@ -620,6 +623,15 @@ def render_text(profile: BoardProfile, text: str, align: str = "center", valign:
     return RenderedMessage(profile=profile, grid=grid)
 
 
+def _kv_format_value(key: str, value: Any) -> str:
+    """Format a kv value, appending % for _pct/_percent keys when missing."""
+    lower = key.lower()
+    s = normalize_text(format_scalar(value))
+    if any(lower.endswith(x) for x in ("_pct", "_percent")) and not s.endswith("%"):
+        return s + "%"
+    return s
+
+
 def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, columns: int = 1, separator: str | None = None) -> RenderedMessage:
     import sys
     grid = blank_grid(profile)
@@ -650,8 +662,8 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
         right_items = items[1::2]
 
         def _col_widths(col_items: list) -> tuple[int, int]:
-            lw = max((len(normalize_text(str(k)).replace("_", " ")) for k, _ in col_items), default=0)
-            vw = max((len(normalize_text(format_scalar(v))) for _, v in col_items), default=0)
+            lw = max((len(prettify_label(k)) for k, _ in col_items), default=0)
+            vw = max((len(_kv_format_value(k, v)) for k, v in col_items), default=0)
             return lw, vw
 
         # Per-column widths (not global max) so the natural gap between columns reflects
@@ -688,8 +700,8 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
 
                 if left_item is not None:
                     lk, lv = left_item
-                    label = ellipsize(normalize_text(str(lk)).replace("_", " "), left_lw).ljust(left_lw)
-                    value = ellipsize(normalize_text(format_scalar(lv)), left_vw).rjust(left_vw)
+                    label = ellipsize(prettify_label(lk), left_lw).ljust(left_lw)
+                    value = ellipsize(_kv_format_value(lk, lv), left_vw).rjust(left_vw)
                     place_line(grid, row, f"{label} {value}", align="left", start_col=0)
                     # Color tile for left column sits in the gap cell right after the value.
                     # gap = max(1, …) guarantees right_start > left_pw, so the tile at
@@ -700,8 +712,8 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
 
                 if right_item is not None:
                     rk, rv = right_item
-                    label = ellipsize(normalize_text(str(rk)).replace("_", " "), right_lw).ljust(right_lw)
-                    value = ellipsize(normalize_text(format_scalar(rv)), right_vw).rjust(right_vw)
+                    label = ellipsize(prettify_label(rk), right_lw).ljust(right_lw)
+                    value = ellipsize(_kv_format_value(rk, rv), right_vw).rjust(right_vw)
                     place_line(grid, row, f"{label} {value}", align="left", start_col=right_start)
                     # Color tile for right column goes at the board's right edge.
                     if right_reserve:
@@ -722,8 +734,8 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
     for key, value in items:
         if row >= profile.rows:
             break
-        key_s = normalize_text(str(key)).replace("_", " ")
-        value_s = normalize_text(format_scalar(value))
+        key_s = prettify_label(key)
+        value_s = _kv_format_value(key, value)
         if profile.cols >= 18:
             left_width = min(max(len(key_s), 6), profile.cols // 2)
             right_width = profile.cols - left_width - 1 - reserve
@@ -887,6 +899,8 @@ def format_field(key: str, value: Any, profile: BoardProfile, style: dict | None
     is_curr = lower_key.endswith("_curr")
     if isinstance(value, (int, float)):
         kind = "percent" if is_pct else "currency" if is_curr else "auto"
+    elif is_pct:
+        kind = "percent"
     else:
         kind = "auto"
     label = prettify_label(key)
@@ -1237,7 +1251,9 @@ def build_message(profile: BoardProfile, template: str, payload: Any, title: str
         else:
             resolved_subtitle = subtitle
 
-    if columns > 1 and template not in ("kv", "auto"):
+    if columns > 1 and template == "auto" and isinstance(payload, dict):
+        template = "kv"  # columns only applies to kv; auto-upgrade silently
+    if columns > 1 and template not in ("kv",):
         import sys
         print(f"warning: --columns {columns} has no effect on template '{template}'", file=sys.stderr)
 

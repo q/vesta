@@ -690,10 +690,11 @@ class TestRenderKv(unittest.TestCase):
         # When content fills the board, the gap between columns is trimmed to 1.
         # The left-column color tile must still appear at position left_pw even
         # when gap == 1 (it sits in the single gap cell, not overwriting the right label).
-        # a_pct ("A PCT", value "5") → left_pw = 5+1+1 = 7; "note" + 10-char value → gap trims to 1.
-        msg = render_kv(FLAGSHIP, {"a_pct": 5.0, "note": "x" * 10}, columns=2)
-        self.assertIsInstance(msg.grid[0][7], Color)  # tile at left_pw = 7
-        self.assertIsInstance(msg.grid[0][8], str)    # right label starts at left_pw+1, not overwritten
+        # score_pct → label "SCORE" (5) + value "5%" (2) → left_pw = 8
+        # "note" (4) + "x"*10 (10) → right_pw = 15; 8+15=23 > 22 → trim → gap = 1
+        msg = render_kv(FLAGSHIP, {"score_pct": 5.0, "note": "x" * 10}, columns=2)
+        self.assertIsInstance(msg.grid[0][8], Color)  # tile at left_pw = 8
+        self.assertIsInstance(msg.grid[0][9], str)    # right label starts at left_pw+1, not overwritten
 
     def test_columns_2_fallback_when_content_too_wide(self):
         # Left pair width alone exceeds note profile; should fall back to 1-col with a warning.
