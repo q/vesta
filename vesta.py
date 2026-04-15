@@ -1130,6 +1130,19 @@ def read_cloud(token: str, profile: BoardProfile | None = None, timeout: int = 1
     return from_characters(chars, profile or _detect_profile(chars))
 
 
+def _raise_for_status(r: Any) -> None:
+    """Raise SystemExit with a human-readable message on HTTP errors."""
+    if r.status_code < 400:
+        return
+    if r.status_code == 400:
+        raise SystemExit(f"error: malformed request (400) — {r.text.strip()}")
+    if r.status_code == 401:
+        raise SystemExit("error: authentication failed (401) — check your token or API key")
+    if r.status_code == 409:
+        raise SystemExit("error: board rejected the post (409 Conflict) — posted too recently, wait a moment and try again")
+    raise SystemExit(f"error: API request failed ({r.status_code}): {r.text.strip()}")
+
+
 def post_cloud(token: str, message: RenderedMessage, timeout: int = 10) -> dict[str, Any]:
     payload = {"characters": message.to_characters()}
     r = requests.post(
@@ -1141,7 +1154,7 @@ def post_cloud(token: str, message: RenderedMessage, timeout: int = 10) -> dict[
         json=payload,
         timeout=timeout,
     )
-    r.raise_for_status()
+    _raise_for_status(r)
     try:
         return r.json()
     except Exception:
@@ -1176,7 +1189,7 @@ def post_local(
         json=payload,
         timeout=timeout,
     )
-    r.raise_for_status()
+    _raise_for_status(r)
     try:
         return r.json()
     except Exception:
