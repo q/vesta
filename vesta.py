@@ -1244,7 +1244,14 @@ def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: boo
         override = style.get(key)
 
         if isinstance(override, str):
-            rows.append(f"  {label:<20} {fmt_value:>8}   {block} explicit")
+            ov = override.lower()
+            if ov == "signed":
+                reason = f"signed (positive → green, negative → red, zero → white) → {tone}"
+            elif ov in ("good", "bad", "warn", "info", "neutral", "muted"):
+                reason = f"tone: {ov}"
+            else:
+                reason = f"color: {ov}"
+            rows.append(f"  {label:<20} {fmt_value:>8}   {block} {reason}")
 
         elif isinstance(override, dict) and "good" in override and "bad" in override:
             good = float(override["good"])
