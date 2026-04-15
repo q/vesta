@@ -63,16 +63,29 @@ GROWTH    12.4%
 
 ## Color indicators
 
-Color is driven by semantic tone, not raw cell placement. The trailing colored tile is added automatically when a tone can be determined.
+A trailing colored tile is added to a field automatically when a color can be determined. Color is driven by meaning, not raw placement — you describe intent and vesta picks the tile.
 
-**Auto-detection:** inferred when a field name contains `change`, `delta`, or `diff` and the value is numeric:
+There are three ways to assign color to a field:
+
+**1. Auto-detection** — no `_style` needed. Fields whose name contains `change`, `delta`, or `diff` are colored automatically based on sign:
 - positive → green
 - negative → red
 - zero → white
 
-`_pct` / `_percent` control value formatting only (appends `%`) — they do not trigger auto-detection. Use `_style` to add color to percentage fields explicitly.
+`_pct` / `_percent` control value formatting only — they do not trigger auto-detection. Use `_style` to add color to percentage fields explicitly.
 
-**Explicit tone:** set via `_style`:
+**2. Explicit color via `_style`** — two forms accepted:
+
+*Semantic tones* — name the intent, vesta picks the color:
+
+| Tone | Color |
+|------|-------|
+| `good` | green |
+| `bad` | red |
+| `warn` | yellow |
+| `info` | blue |
+| `neutral` | white |
+| `muted` | black |
 
 ```json
 {
@@ -81,11 +94,12 @@ Color is driven by semantic tone, not raw cell placement. The trailing colored t
 }
 ```
 
-Accepted tone names: `good`, `bad`, `warn`, `info`, `neutral`, `muted`,
-or a direct color: `green`, `red`, `yellow`, `blue`, `white`, `black`, `violet`, `orange`.
+*Direct colors* — name the color explicitly: `green`, `red`, `yellow`, `blue`, `white`, `black`, `violet`, `orange`.
 Aliases: `purple` → violet, `grey`/`gray` → black.
 
-Use `"signed"` for sign-based coloring — positive → green, negative → red, zero → white. Useful for percentage fields that aren't named with `change`/`delta`/`diff`:
+**3. Dynamic strategies** — the color depends on the field's value at render time:
+
+*`"signed"`* — colors by sign: positive → green, negative → red, zero → white. Useful for numeric fields not named with `change`/`delta`/`diff`:
 
 ```json
 {
@@ -94,16 +108,7 @@ Use `"signed"` for sign-based coloring — positive → green, negative → red,
 }
 ```
 
-Use `"none"` to suppress the color tile on a specific field:
-
-```json
-{
-  "delta": 0,
-  "_style": { "delta": "none" }
-}
-```
-
-**Range-based tone:** specify `good` and `bad` thresholds for a 4-step gradient. Direction is implicit — wherever `good` sits numerically is the green end:
+*Range object* — specify numeric thresholds for a 4-step gradient. The `good` and `bad` keys are threshold labels (not tone names) that mark which end of the scale is favorable; direction is inferred automatically:
 
 ```json
 {
@@ -118,6 +123,15 @@ Use `"none"` to suppress the color tile on a specific field:
 | 2nd quarter | yellow | 25–50% |
 | 3rd quarter | orange | 50–75% |
 | 4th quarter | red | 75–100% (and beyond) |
+
+**Suppressing a tile** — use `"none"` to prevent a color tile on a field that would otherwise get one (e.g. auto-detected fields where you want plain output):
+
+```json
+{
+  "delta": 0,
+  "_style": { "delta": "none" }
+}
+```
 
 `_style` and other `_`-prefixed keys are never shown on the board.
 
