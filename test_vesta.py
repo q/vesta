@@ -1068,10 +1068,10 @@ class TestExplainMetrics(unittest.TestCase):
         result = explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=False)
         self.assertIn("auto", result)
 
-    def test_explicit_style_labeled_explicit(self):
+    def test_explicit_style_labeled_tone(self):
         data = {"score": 90, "_style": {"score": "good"}}
         result = explain_metrics(data, FLAGSHIP, ansi_color=False)
-        self.assertIn("explicit", result)
+        self.assertIn("tone: good", result)
 
     def test_range_style_labeled_range(self):
         data = {"bounce": 55.0, "_style": {"bounce": {"good": 30, "bad": 80}}}
@@ -1380,12 +1380,12 @@ class TestCliExplain(unittest.TestCase):
         self.assertIn("CHANGE", out)
 
     def test_explain_explicit_style_shown(self):
-        # _style with an explicit tone → "explicit" in explain output.
+        # _style with an explicit tone → "tone: good" in explain output.
         out = self._run(
             ["render", "--explain", "--no-preview", "--no-ansi"],
             '{"score": 91, "_style": {"score": "good"}}',
         )
-        self.assertIn("explicit", out)
+        self.assertIn("tone: good", out)
 
     def test_explain_silent_when_no_color_fields(self):
         # Plain dict with no tone-triggering keys → explain returns "" → nothing extra.

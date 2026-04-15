@@ -1225,63 +1225,111 @@ def _ansi_block(color: Color, ansi: bool) -> str:
 
 
 def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: bool = True) -> str:
-    """Return a human-readable breakdown of tone/color decisions for a metrics payload.
-    Returns an empty string if no color indicators are present."""
+    """Return a human-readable breakdown of color indicators and numeric formatting
+    for a metrics payload. Returns an empty string if nothing to explain."""
     style = data.get("_style") if isinstance(data.get("_style"), dict) else {}
-    rows = []
+    color_rows: list[str] = []
+    format_rows: list[str] = []
 
     for key, value in data.items():
         if key.startswith("_"):
             continue
-        tone = resolve_tone(data, key, value)
-        color = tone_to_color(tone)
-        if color is None:
-            continue
+
+        is_pct = key_is_pct(key)
+        is_curr = key_is_curr(key)
+        if isinstance(value, (int, float)):
+            kind = "percent" if is_pct else "currency" if is_curr else "auto"
+        elif is_pct:
+            kind = "percent"
+        elif is_curr:
+            kind = "currency"
+        else:
+            kind = None
 
         label = prettify_label(key)
-        fmt_value = format_metric_value(value, "auto", profile)
-        block = _ansi_block(color, ansi_color)
-        override = style.get(key)
+        fmt_value = format_metric_value(value, kind or "auto", profile)
 
-        if isinstance(override, str):
-            ov = override.lower()
-            if ov == "signed":
-                reason = f"signed (positive → green, negative → red, zero → white) → {tone}"
-            elif ov in ("good", "bad", "warn", "info", "neutral", "muted"):
-                reason = f"tone: {ov}"
+        # Color indicators section
+        tone = resolve_tone(data, key, value)
+        color = tone_to_color(tone)
+        if color is not None:
+            block = _ansi_block(color, ansi_color)
+            override = style.get(key)
+
+            if isinstance(override, str):
+                ov = override.lower()
+                if ov == "signed":
+                    color_reason = f"signed (positive → green, negative → red, zero → white) → {tone}"
+                elif ov in ("good", "bad", "warn", "info", "neutral", "muted"):
+                    color_reason = f"tone: {ov}"
+                else:
+                    color_reason = f"color: {ov}"
+
+            elif isinstance(override, dict) and "good" in override and "bad" in override:
+                good = float(override["good"])
+                bad = float(override["bad"])
+                b1 = good + (bad - good) * 0.25
+                b2 = good + (bad - good) * 0.50
+                b3 = good + (bad - good) * 0.75
+                if good < bad:
+                    zones = (
+                        f"{_ansi_block(Color.GREEN,  ansi_color)}≤{b1:g}"
+                        f" · {_ansi_block(Color.YELLOW, ansi_color)}{b1:g}–{b2:g}"
+                        f" · {_ansi_block(Color.ORANGE, ansi_color)}{b2:g}–{b3:g}"
+                        f" · {_ansi_block(Color.RED,    ansi_color)}≥{b3:g}"
+                    )
+                else:
+                    zones = (
+                        f"{_ansi_block(Color.GREEN,  ansi_color)}≥{b1:g}"
+                        f" · {_ansi_block(Color.YELLOW, ansi_color)}{b2:g}–{b1:g}"
+                        f" · {_ansi_block(Color.ORANGE, ansi_color)}{b3:g}–{b2:g}"
+                        f" · {_ansi_block(Color.RED,    ansi_color)}≤{b3:g}"
+                    )
+                color_reason = f"range good={good:g} bad={bad:g}   {zones}"
+
             else:
-                reason = f"color: {ov}"
-            rows.append(f"  {label:<20} {fmt_value:>8}   {block} {reason}")
+                color_reason = "auto"
 
-        elif isinstance(override, dict) and "good" in override and "bad" in override:
-            good = float(override["good"])
-            bad = float(override["bad"])
-            b1 = good + (bad - good) * 0.25
-            b2 = good + (bad - good) * 0.50
-            b3 = good + (bad - good) * 0.75
+            color_rows.append(f"  {label:<20} {fmt_value:>8}   {block} {color_reason}")
 
-            if good < bad:
-                zones = (
-                    f"{_ansi_block(Color.GREEN,  ansi_color)}≤{b1:g}"
-                    f" · {_ansi_block(Color.YELLOW, ansi_color)}{b1:g}–{b2:g}"
-                    f" · {_ansi_block(Color.ORANGE, ansi_color)}{b2:g}–{b3:g}"
-                    f" · {_ansi_block(Color.RED,    ansi_color)}≥{b3:g}"
-                )
-            else:
-                zones = (
-                    f"{_ansi_block(Color.GREEN,  ansi_color)}≥{b1:g}"
-                    f" · {_ansi_block(Color.YELLOW, ansi_color)}{b2:g}–{b1:g}"
-                    f" · {_ansi_block(Color.ORANGE, ansi_color)}{b3:g}–{b2:g}"
-                    f" · {_ansi_block(Color.RED,    ansi_color)}≤{b3:g}"
-                )
-            rows.append(f"  {label:<20} {fmt_value:>8}   {block} range good={good:g} bad={bad:g}   {zones}")
+        # Numeric formatting section — only fields where something actually changed
+        if kind is None:
+            continue
 
+        raw_label = normalize_text(key).replace("_", " ").strip()
+        label_changed = raw_label != label
+
+        raw_str = str(int(value)) if isinstance(value, float) and value.is_integer() else str(value)
+        value_changed = raw_str != fmt_value
+
+        if not label_changed and not value_changed:
+            continue
+
+        if is_curr:
+            fmt_parts = ["_curr suffix"]
+            if label_changed:
+                fmt_parts.append("label stripped")
+            if value_changed:
+                fmt_parts.append("currency format")
+        elif is_pct:
+            fmt_parts = ["_pct suffix"]
+            if label_changed:
+                fmt_parts.append("label stripped")
+            if value_changed:
+                fmt_parts.append("percent format")
         else:
-            rows.append(f"  {label:<20} {fmt_value:>8}   {block} auto")
+            fmt_parts = ["auto compaction"]
 
-    if not rows:
-        return ""
-    return "\n".join(["── color indicators " + "─" * 20, *rows])
+        key_display = f"{key} → {label}" if label_changed else label
+        val_display = f"{raw_str} → {fmt_value}" if value_changed else fmt_value
+        format_rows.append(f"  {key_display:<28}  {val_display:<20}  {', '.join(fmt_parts)}")
+
+    sections = []
+    if color_rows:
+        sections.append("\n".join(["── color indicators " + "─" * 20, *color_rows]))
+    if format_rows:
+        sections.append("\n".join(["── numeric formatting " + "─" * 19, *format_rows]))
+    return "\n\n".join(sections) if sections else ""
 
 
 # -----------------------------------------------------------------------------
