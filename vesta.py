@@ -4,7 +4,7 @@ try:
     from importlib.metadata import version
     __version__ = version("vestaboard-tools")
 except Exception:
-    __version__ = "0.1.0"  # fallback when running from source uninstalled
+    __version__ = "0.3.0"  # fallback when running from source uninstalled
 
 import argparse
 import csv
