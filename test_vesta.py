@@ -1085,7 +1085,7 @@ class TestExplainMetrics(unittest.TestCase):
         self.assertIn("bad=80", result)
 
     def test_no_color_fields_returns_empty(self):
-        result = explain_metrics({"revenue": 1000}, FLAGSHIP, ansi_color=False)
+        result = explain_metrics({"score": 42}, FLAGSHIP, ansi_color=False)
         self.assertEqual(result, "")
 
     def test_underscore_keys_excluded(self):

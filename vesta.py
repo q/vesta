@@ -546,6 +546,8 @@ def format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
             return f"${n:.2f}"
         if kind == "percent":
             return f"{smart_round(n, sig_figs=3)}%"
+        if kind == "auto":
+            return compact_number(n)
     if kind == "percent":
         s = normalize_text(format_scalar(value))
         return s if s.endswith("%") else s + "%"
