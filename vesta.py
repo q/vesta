@@ -1322,7 +1322,7 @@ def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: boo
         else:
             fmt_parts = ["auto compaction"]
 
-        key_display = f"{key} → {label}" if label_changed else label
+        key_display = f"{key} → {label}" if label_changed else key
         val_display = f"{raw_str} → {fmt_value}" if value_changed else fmt_value
         format_rows.append(f"  {key_display:<28}  {val_display:<20}  {', '.join(fmt_parts)}")
 
