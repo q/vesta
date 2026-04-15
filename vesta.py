@@ -1067,6 +1067,8 @@ def load_payload(path: str | None) -> Any:
         with open(path, "r", encoding="utf-8") as f:
             raw = f.read()
     else:
+        if sys.stdin.isatty():
+            raise SystemExit("error: no input provided. pipe data or use --input <file>")
         raw = sys.stdin.read()
     raw = raw.strip()
     if not raw:
