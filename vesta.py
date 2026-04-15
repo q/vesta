@@ -1533,7 +1533,11 @@ def cli(argv: list[str] | None = None) -> int:
 
 
 def main() -> None:
-    raise SystemExit(cli())
+    try:
+        raise SystemExit(cli())
+    except BrokenPipeError:
+        sys.stdout = None  # suppress flush-on-exit noise
+        sys.exit(0)
 
 
 if __name__ == "__main__":
