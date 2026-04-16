@@ -8,28 +8,28 @@ from vesta import (
     FLAGSHIP,
     NOTE,
     Color,
-    blank_grid,
+    _blank_grid,
     cli,
-    place_separator,
-    compact_datetime,
-    ellipsize,
-    encode_cell,
-    explain_metrics,
-    format_metric_value,
-    load_payload,
-    place_timestamp,
-    prettify_label,
+    _place_separator,
+    _compact_datetime,
+    _ellipsize,
+    _encode_cell,
+    _explain_metrics,
+    _format_metric_value,
+    _load_payload,
+    _place_timestamp,
+    _prettify_label,
     render_kv,
-    smart_round,
-    format_field,
+    _smart_round,
+    _format_field,
     render_data,
-    render_metrics,
-    render_table,
+    _render_metrics,
+    _render_table,
     render_text,
-    resolve_tone,
-    tone_from_range,
-    tone_to_color,
-    wrap_text,
+    _resolve_tone,
+    _tone_from_range,
+    _tone_to_color,
+    _wrap_text,
 )
 
 
@@ -43,142 +43,142 @@ class TestProfiles(unittest.TestCase):
         self.assertEqual(NOTE.cols, 15)
 
     def test_blank_grid_flagship(self):
-        grid = blank_grid(FLAGSHIP)
+        grid = _blank_grid(FLAGSHIP)
         self.assertEqual(len(grid), 6)
         self.assertEqual(len(grid[0]), 22)
 
     def test_blank_grid_note(self):
-        grid = blank_grid(NOTE)
+        grid = _blank_grid(NOTE)
         self.assertEqual(len(grid), 3)
         self.assertEqual(len(grid[0]), 15)
 
 
 class TestEncoding(unittest.TestCase):
     def test_space_is_zero(self):
-        self.assertEqual(encode_cell(" ", FLAGSHIP), 0)
+        self.assertEqual(_encode_cell(" ", FLAGSHIP), 0)
 
     def test_letter_a(self):
-        self.assertEqual(encode_cell("A", FLAGSHIP), 1)
+        self.assertEqual(_encode_cell("A", FLAGSHIP), 1)
 
     def test_lowercase_normalized(self):
-        self.assertEqual(encode_cell("a", FLAGSHIP), 1)
+        self.assertEqual(_encode_cell("a", FLAGSHIP), 1)
 
     def test_letter_z(self):
-        self.assertEqual(encode_cell("Z", FLAGSHIP), 26)
+        self.assertEqual(_encode_cell("Z", FLAGSHIP), 26)
 
     def test_digit_1(self):
-        self.assertEqual(encode_cell("1", FLAGSHIP), 27)
+        self.assertEqual(_encode_cell("1", FLAGSHIP), 27)
 
     def test_digit_0(self):
-        self.assertEqual(encode_cell("0", FLAGSHIP), 36)
+        self.assertEqual(_encode_cell("0", FLAGSHIP), 36)
 
     def test_unsupported_char_is_zero(self):
-        self.assertEqual(encode_cell("~", FLAGSHIP), 0)
-        self.assertEqual(encode_cell("\n", FLAGSHIP), 0)
+        self.assertEqual(_encode_cell("~", FLAGSHIP), 0)
+        self.assertEqual(_encode_cell("\n", FLAGSHIP), 0)
 
     def test_color_encodes_directly(self):
-        self.assertEqual(encode_cell(Color.RED, FLAGSHIP), 63)
-        self.assertEqual(encode_cell(Color.GREEN, FLAGSHIP), 66)
-        self.assertEqual(encode_cell(Color.FILLED, FLAGSHIP), 71)
+        self.assertEqual(_encode_cell(Color.RED, FLAGSHIP), 63)
+        self.assertEqual(_encode_cell(Color.GREEN, FLAGSHIP), 66)
+        self.assertEqual(_encode_cell(Color.FILLED, FLAGSHIP), 71)
 
     def test_all_colors_in_range(self):
         for color in Color:
-            code = encode_cell(color, FLAGSHIP)
+            code = _encode_cell(color, FLAGSHIP)
             self.assertGreaterEqual(code, 63)
             self.assertLessEqual(code, 71)
 
     def test_degree_on_flagship(self):
-        self.assertEqual(encode_cell("°", FLAGSHIP), 62)
+        self.assertEqual(_encode_cell("°", FLAGSHIP), 62)
 
     def test_heart_on_note(self):
-        self.assertEqual(encode_cell("❤", NOTE), 62)
+        self.assertEqual(_encode_cell("❤", NOTE), 62)
 
     def test_degree_on_note_maps_to_heart_code(self):
         # Hardware quirk: ° on Note resolves to ❤ (both are code 62)
-        self.assertEqual(encode_cell("°", NOTE), 62)
+        self.assertEqual(_encode_cell("°", NOTE), 62)
 
     def test_heart_on_flagship_maps_to_degree_code(self):
         # Hardware quirk: ❤ on Flagship resolves to ° (both are code 62)
-        self.assertEqual(encode_cell("❤", FLAGSHIP), 62)
+        self.assertEqual(_encode_cell("❤", FLAGSHIP), 62)
 
 
 class TestTruncation(unittest.TestCase):
     def test_no_truncation_when_fits(self):
-        self.assertEqual(ellipsize("HELLO", 10), "HELLO")
+        self.assertEqual(_ellipsize("HELLO", 10), "HELLO")
 
     def test_exact_fit(self):
-        self.assertEqual(ellipsize("HELLO", 5), "HELLO")
+        self.assertEqual(_ellipsize("HELLO", 5), "HELLO")
 
     def test_truncates_to_exact_width(self):
-        result = ellipsize("HELLO WORLD", 6)
+        result = _ellipsize("HELLO WORLD", 6)
         self.assertEqual(result, "HELLO ")
 
     def test_normalizes_to_uppercase(self):
-        self.assertEqual(ellipsize("hello", 10), "HELLO")
+        self.assertEqual(_ellipsize("hello", 10), "HELLO")
 
     def test_no_truncation_marker(self):
-        result = ellipsize("HELLO WORLD", 8)
+        result = _ellipsize("HELLO WORLD", 8)
         self.assertEqual(result, "HELLO WO")
 
     def test_wrap_text_basic(self):
-        lines = wrap_text("HELLO WORLD", 22, 6)
+        lines = _wrap_text("HELLO WORLD", 22, 6)
         self.assertIn("HELLO WORLD", lines[0])
 
     def test_wrap_text_respects_max_lines(self):
-        lines = wrap_text("ONE TWO THREE FOUR FIVE SIX SEVEN", 5, 2)
+        lines = _wrap_text("ONE TWO THREE FOUR FIVE SIX SEVEN", 5, 2)
         self.assertLessEqual(len(lines), 2)
 
     def test_wrap_text_pads_to_width(self):
-        lines = wrap_text("HI", 10, 3)
+        lines = _wrap_text("HI", 10, 3)
         for line in lines:
             self.assertEqual(len(line), 10)
 
     def test_wrap_text_empty(self):
-        lines = wrap_text("", 22, 6)
+        lines = _wrap_text("", 22, 6)
         self.assertEqual(lines, [""])
 
 
 class TestDatetimeCompaction(unittest.TestCase):
     def test_iso_flagship(self):
-        result = compact_datetime("2024-03-15T14:30:00", FLAGSHIP)
+        result = _compact_datetime("2024-03-15T14:30:00", FLAGSHIP)
         self.assertEqual(result, "3/15 2:30P")
 
     def test_iso_note(self):
-        result = compact_datetime("2024-03-15T14:30:00", NOTE)
+        result = _compact_datetime("2024-03-15T14:30:00", NOTE)
         self.assertEqual(result, "2:30P")
 
     def test_midnight_is_am(self):
-        result = compact_datetime("2024-01-01T00:00:00", NOTE)
+        result = _compact_datetime("2024-01-01T00:00:00", NOTE)
         self.assertIn("A", result)
 
     def test_noon_is_pm(self):
-        result = compact_datetime("2024-01-01T12:00:00", NOTE)
+        result = _compact_datetime("2024-01-01T12:00:00", NOTE)
         self.assertIn("P", result)
 
     def test_noon_hour_is_12(self):
-        result = compact_datetime("2024-01-01T12:00:00", NOTE)
+        result = _compact_datetime("2024-01-01T12:00:00", NOTE)
         self.assertTrue(result.startswith("12:"))
 
     def test_invalid_falls_back(self):
-        result = compact_datetime("not a date", FLAGSHIP)
+        result = _compact_datetime("not a date", FLAGSHIP)
         # Falls back to normalized/truncated string — no crash
         self.assertIsInstance(result, str)
         self.assertLessEqual(len(result), 12)
 
     def test_format_metric_value_datetime(self):
-        result = format_metric_value("2024-06-01T09:15:00", "datetime", FLAGSHIP)
+        result = _format_metric_value("2024-06-01T09:15:00", "datetime", FLAGSHIP)
         self.assertEqual(result, "6/1 9:15A")
 
     def test_format_metric_value_percent_has_symbol(self):
-        result = format_metric_value(12.5, "percent", FLAGSHIP)
+        result = _format_metric_value(12.5, "percent", FLAGSHIP)
         self.assertIn("%", result)
 
     def test_format_metric_value_percent_strips_trailing_zeros(self):
-        result = format_metric_value(10.0, "percent", FLAGSHIP)
+        result = _format_metric_value(10.0, "percent", FLAGSHIP)
         self.assertEqual(result, "10%")
 
     def test_format_metric_value_percent_negative(self):
-        result = format_metric_value(-3.5, "percent", FLAGSHIP)
+        result = _format_metric_value(-3.5, "percent", FLAGSHIP)
         self.assertIn("%", result)
         self.assertIn("-3.5", result)
 
@@ -187,294 +187,294 @@ class TestTone(unittest.TestCase):
     def test_positive_pct_no_auto_tone(self):
         # _pct suffix only formats the value; it does not trigger auto-detection
         data = {"price_pct": 5.2}
-        self.assertIsNone(resolve_tone(data, "price_pct", 5.2))
+        self.assertIsNone(_resolve_tone(data, "price_pct", 5.2))
 
     def test_positive_change_pct_is_good(self):
         data = {"price_change_pct": 5.2}
-        self.assertEqual(resolve_tone(data, "price_change_pct", 5.2), "good")
+        self.assertEqual(_resolve_tone(data, "price_change_pct", 5.2), "good")
 
     def test_negative_change_is_bad(self):
         data = {"price_change": -3.1}
-        self.assertEqual(resolve_tone(data, "price_change", -3.1), "bad")
+        self.assertEqual(_resolve_tone(data, "price_change", -3.1), "bad")
 
     def test_zero_change_is_neutral(self):
         data = {"delta": 0}
-        self.assertEqual(resolve_tone(data, "delta", 0), "neutral")
+        self.assertEqual(_resolve_tone(data, "delta", 0), "neutral")
 
     def test_growth_delta_positive(self):
         data = {"growth_delta": 8.0}
-        self.assertEqual(resolve_tone(data, "growth_delta", 8.0), "good")
+        self.assertEqual(_resolve_tone(data, "growth_delta", 8.0), "good")
 
     def test_diff_negative(self):
         data = {"diff": -1}
-        self.assertEqual(resolve_tone(data, "diff", -1), "bad")
+        self.assertEqual(_resolve_tone(data, "diff", -1), "bad")
 
     def test_plain_value_no_tone(self):
         data = {"revenue": 1000}
-        self.assertIsNone(resolve_tone(data, "revenue", 1000))
+        self.assertIsNone(_resolve_tone(data, "revenue", 1000))
 
     def test_style_override_string(self):
         data = {"revenue": 1000, "_style": {"revenue": "bad"}}
-        self.assertEqual(resolve_tone(data, "revenue", 1000), "bad")
+        self.assertEqual(_resolve_tone(data, "revenue", 1000), "bad")
 
     def test_signed_positive_is_good(self):
         data = {"margin_pct": 4.2, "_style": {"margin_pct": "signed"}}
-        self.assertEqual(resolve_tone(data, "margin_pct", 4.2), "good")
+        self.assertEqual(_resolve_tone(data, "margin_pct", 4.2), "good")
 
     def test_signed_negative_is_bad(self):
         data = {"margin_pct": -1.8, "_style": {"margin_pct": "signed"}}
-        self.assertEqual(resolve_tone(data, "margin_pct", -1.8), "bad")
+        self.assertEqual(_resolve_tone(data, "margin_pct", -1.8), "bad")
 
     def test_signed_zero_is_neutral(self):
         data = {"margin_pct": 0, "_style": {"margin_pct": "signed"}}
-        self.assertEqual(resolve_tone(data, "margin_pct", 0), "neutral")
+        self.assertEqual(_resolve_tone(data, "margin_pct", 0), "neutral")
 
     def test_signed_string_value(self):
         data = {"margin_pct": "3.5%", "_style": {"margin_pct": "signed"}}
-        self.assertEqual(resolve_tone(data, "margin_pct", "3.5%"), "good")
+        self.assertEqual(_resolve_tone(data, "margin_pct", "3.5%"), "good")
 
     def test_style_override_dict(self):
         data = {"revenue": 1000, "_style": {"revenue": {"tone": "warn"}}}
-        self.assertEqual(resolve_tone(data, "revenue", 1000), "warn")
+        self.assertEqual(_resolve_tone(data, "revenue", 1000), "warn")
 
     def test_tone_to_color_good(self):
-        self.assertEqual(tone_to_color("good"), Color.GREEN)
+        self.assertEqual(_tone_to_color("good"), Color.GREEN)
 
     def test_tone_to_color_bad(self):
-        self.assertEqual(tone_to_color("bad"), Color.RED)
+        self.assertEqual(_tone_to_color("bad"), Color.RED)
 
     def test_tone_to_color_warn(self):
-        self.assertEqual(tone_to_color("warn"), Color.YELLOW)
+        self.assertEqual(_tone_to_color("warn"), Color.YELLOW)
 
     def test_tone_to_color_none(self):
-        self.assertIsNone(tone_to_color(None))
+        self.assertIsNone(_tone_to_color(None))
 
     def test_tone_to_color_unknown(self):
-        self.assertIsNone(tone_to_color("unknown"))
+        self.assertIsNone(_tone_to_color("unknown"))
 
     def test_tone_to_color_case_insensitive(self):
-        self.assertEqual(tone_to_color("GOOD"), Color.GREEN)
+        self.assertEqual(_tone_to_color("GOOD"), Color.GREEN)
 
     # Range-based tone
     def test_range_at_good_end(self):
-        self.assertEqual(tone_from_range(30, good=30, bad=80), "good")
+        self.assertEqual(_tone_from_range(30, good=30, bad=80), "good")
 
     def test_range_at_bad_end(self):
-        self.assertEqual(tone_from_range(80, good=30, bad=80), "bad")
+        self.assertEqual(_tone_from_range(80, good=30, bad=80), "bad")
 
     def test_range_better_than_good_clamps_green(self):
-        self.assertEqual(tone_from_range(10, good=30, bad=80), "good")
+        self.assertEqual(_tone_from_range(10, good=30, bad=80), "good")
 
     def test_range_worse_than_bad_clamps_red(self):
-        self.assertEqual(tone_from_range(99, good=30, bad=80), "bad")
+        self.assertEqual(_tone_from_range(99, good=30, bad=80), "bad")
 
     def test_range_midpoint_is_yellow_or_orange(self):
         # Midpoint (t=0.5) is the boundary between yellow and orange
-        result = tone_from_range(55, good=30, bad=80)
+        result = _tone_from_range(55, good=30, bad=80)
         self.assertIn(result, ("warn", "orange"))
 
     def test_range_lower_quarter_is_yellow(self):
         # t=0.375 → yellow
-        self.assertEqual(tone_from_range(48.75, good=30, bad=80), "warn")
+        self.assertEqual(_tone_from_range(48.75, good=30, bad=80), "warn")
 
     def test_range_upper_quarter_is_orange(self):
         # t=0.625 → orange
-        self.assertEqual(tone_from_range(61.25, good=30, bad=80), "orange")
+        self.assertEqual(_tone_from_range(61.25, good=30, bad=80), "orange")
 
     def test_range_inverted_direction(self):
         # Higher is better: good=8, bad=2 (conversion rate)
-        self.assertEqual(tone_from_range(8, good=8, bad=2), "good")
-        self.assertEqual(tone_from_range(2, good=8, bad=2), "bad")
-        self.assertEqual(tone_from_range(10, good=8, bad=2), "good")  # clamp
+        self.assertEqual(_tone_from_range(8, good=8, bad=2), "good")
+        self.assertEqual(_tone_from_range(2, good=8, bad=2), "bad")
+        self.assertEqual(_tone_from_range(10, good=8, bad=2), "good")  # clamp
 
     def test_range_via_style_override(self):
         data = {"bounce_rate": 68.4, "_style": {"bounce_rate": {"good": 30, "bad": 80}}}
         # t = (68.4 - 30) / (80 - 30) = 38.4 / 50 = 0.768 → bad (red)
-        self.assertEqual(resolve_tone(data, "bounce_rate", 68.4), "bad")
+        self.assertEqual(_resolve_tone(data, "bounce_rate", 68.4), "bad")
 
     def test_range_good_value_via_style(self):
         data = {"bounce_rate": 25.0, "_style": {"bounce_rate": {"good": 30, "bad": 80}}}
         # t = (25 - 30) / 50 = -0.1 → clamped to 0 → good (green)
-        self.assertEqual(resolve_tone(data, "bounce_rate", 25.0), "good")
+        self.assertEqual(_resolve_tone(data, "bounce_rate", 25.0), "good")
 
     def test_range_equal_good_bad_is_neutral(self):
-        self.assertEqual(tone_from_range(50, good=50, bad=50), "neutral")
+        self.assertEqual(_tone_from_range(50, good=50, bad=50), "neutral")
 
     # Exact boundary values for the 4-step gradient
     def test_range_boundary_at_t025_is_warn(self):
         # t=0.25 → first warn zone
-        self.assertEqual(tone_from_range(42.5, good=30, bad=80), "warn")
+        self.assertEqual(_tone_from_range(42.5, good=30, bad=80), "warn")
 
     def test_range_boundary_at_t050_is_orange(self):
         # t=0.50 → orange zone
-        self.assertEqual(tone_from_range(55.0, good=30, bad=80), "orange")
+        self.assertEqual(_tone_from_range(55.0, good=30, bad=80), "orange")
 
     def test_range_boundary_at_t075_is_bad(self):
         # t=0.75 → red zone
-        self.assertEqual(tone_from_range(67.5, good=30, bad=80), "bad")
+        self.assertEqual(_tone_from_range(67.5, good=30, bad=80), "bad")
 
-    # resolve_tone: range override does not apply to non-numeric values
+    # _resolve_tone: range override does not apply to non-numeric values
     def test_range_override_non_numeric_returns_none(self):
         data = {"status": "ok", "_style": {"status": {"good": 0, "bad": 100}}}
-        self.assertIsNone(resolve_tone(data, "status", "ok"))
+        self.assertIsNone(_resolve_tone(data, "status", "ok"))
 
-    # tone_to_color for all semantic tone names
+    # _tone_to_color for all semantic tone names
     def test_tone_to_color_info(self):
-        self.assertEqual(tone_to_color("info"), Color.BLUE)
+        self.assertEqual(_tone_to_color("info"), Color.BLUE)
 
     def test_tone_to_color_neutral(self):
-        self.assertEqual(tone_to_color("neutral"), Color.WHITE)
+        self.assertEqual(_tone_to_color("neutral"), Color.WHITE)
 
     def test_tone_to_color_muted(self):
-        self.assertEqual(tone_to_color("muted"), Color.BLACK)
+        self.assertEqual(_tone_to_color("muted"), Color.BLACK)
 
     def test_tone_to_color_orange(self):
-        self.assertEqual(tone_to_color("orange"), Color.ORANGE)
+        self.assertEqual(_tone_to_color("orange"), Color.ORANGE)
 
     # Direct color names are also accepted
     def test_tone_to_color_direct_green(self):
-        self.assertEqual(tone_to_color("green"), Color.GREEN)
+        self.assertEqual(_tone_to_color("green"), Color.GREEN)
 
     def test_tone_to_color_direct_violet(self):
-        self.assertEqual(tone_to_color("violet"), Color.VIOLET)
+        self.assertEqual(_tone_to_color("violet"), Color.VIOLET)
 
 
 class TestSmartRound(unittest.TestCase):
     def test_large_number_no_decimals(self):
-        self.assertEqual(smart_round(288.17), "288")
+        self.assertEqual(_smart_round(288.17), "288")
 
     def test_tens_no_decimals(self):
-        self.assertEqual(smart_round(28.17), "28")
+        self.assertEqual(_smart_round(28.17), "28")
 
     def test_single_digit_one_decimal(self):
-        self.assertEqual(smart_round(3.17), "3.2")
+        self.assertEqual(_smart_round(3.17), "3.2")
 
     def test_sub_one_two_decimals(self):
-        self.assertEqual(smart_round(0.317), "0.32")
+        self.assertEqual(_smart_round(0.317), "0.32")
 
     def test_negative_rounds_away_from_zero(self):
-        self.assertEqual(smart_round(-12.5), "-13")
+        self.assertEqual(_smart_round(-12.5), "-13")
 
     def test_positive_half_rounds_up(self):
-        self.assertEqual(smart_round(12.5), "13")
+        self.assertEqual(_smart_round(12.5), "13")
 
     def test_zero(self):
-        self.assertEqual(smart_round(0), "0")
+        self.assertEqual(_smart_round(0), "0")
 
     def test_whole_number_no_trailing_zero(self):
-        self.assertEqual(smart_round(10.0), "10")
+        self.assertEqual(_smart_round(10.0), "10")
 
     def test_hundred(self):
-        self.assertEqual(smart_round(100.0), "100")
+        self.assertEqual(_smart_round(100.0), "100")
 
 
 class TestPrettifyLabel(unittest.TestCase):
     def test_pct_suffix_stripped(self):
-        self.assertEqual(prettify_label("wind_pct"), "WIND")
+        self.assertEqual(_prettify_label("wind_pct"), "WIND")
 
     def test_percent_suffix_stripped(self):
-        self.assertEqual(prettify_label("rain_percent"), "RAIN")
+        self.assertEqual(_prettify_label("rain_percent"), "RAIN")
 
     def test_compound_pct_suffix_stripped(self):
-        self.assertEqual(prettify_label("wind_delta_pct"), "WIND DELTA")
+        self.assertEqual(_prettify_label("wind_delta_pct"), "WIND DELTA")
 
     def test_non_pct_key_unchanged(self):
-        self.assertEqual(prettify_label("temperature"), "TEMPERATURE")
+        self.assertEqual(_prettify_label("temperature"), "TEMPERATURE")
 
     def test_curr_suffix_stripped(self):
-        self.assertEqual(prettify_label("revenue_curr"), "REVENUE")
+        self.assertEqual(_prettify_label("revenue_curr"), "REVENUE")
 
     def test_compound_curr_suffix_stripped(self):
-        self.assertEqual(prettify_label("total_sales_curr"), "TOTAL SALES")
+        self.assertEqual(_prettify_label("total_sales_curr"), "TOTAL SALES")
 
     def test_underscores_become_spaces(self):
-        self.assertEqual(prettify_label("bounce_rate"), "BOUNCE RATE")
+        self.assertEqual(_prettify_label("bounce_rate"), "BOUNCE RATE")
 
 
 class TestPctFormatting(unittest.TestCase):
     def test_pct_key_value_has_percent_sign(self):
-        msg = render_metrics(FLAGSHIP, {"score_pct": 21.32})
+        msg = _render_metrics(FLAGSHIP, {"score_pct": 21.32})
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         self.assertIn("%", all_chars)
 
     def test_pct_key_label_has_no_pct(self):
-        msg = render_metrics(FLAGSHIP, {"score_pct": 21.32})
+        msg = _render_metrics(FLAGSHIP, {"score_pct": 21.32})
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         self.assertNotIn("P C T", all_chars)
 
     def test_curr_key_value_has_dollar_sign(self):
-        msg = render_metrics(FLAGSHIP, {"revenue_curr": 84210.50})
+        msg = _render_metrics(FLAGSHIP, {"revenue_curr": 84210.50})
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         self.assertIn("$", all_chars)
 
     def test_curr_key_label_has_no_curr(self):
-        msg = render_metrics(FLAGSHIP, {"revenue_curr": 84210.50})
+        msg = _render_metrics(FLAGSHIP, {"revenue_curr": 84210.50})
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         self.assertNotIn("C U R R", all_chars)
 
     def test_non_pct_key_no_percent_sign(self):
-        msg = render_metrics(FLAGSHIP, {"score": 21.32})
+        msg = _render_metrics(FLAGSHIP, {"score": 21.32})
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         self.assertNotIn("%", all_chars)
 
 
 class TestRenderMetrics(unittest.TestCase):
     def test_grid_dimensions_flagship(self):
-        msg = render_metrics(FLAGSHIP, {"score": 95, "count": 42})
+        msg = _render_metrics(FLAGSHIP, {"score": 95, "count": 42})
         self.assertEqual(len(msg.grid), 6)
         self.assertEqual(len(msg.grid[0]), 22)
 
     def test_grid_dimensions_note(self):
-        msg = render_metrics(NOTE, {"a": 1, "b": 2, "c": 3, "d": 4})
+        msg = _render_metrics(NOTE, {"a": 1, "b": 2, "c": 3, "d": 4})
         self.assertEqual(len(msg.grid), 3)
         self.assertEqual(len(msg.grid[0]), 15)
 
     def test_underscore_keys_not_rendered(self):
-        msg = render_metrics(FLAGSHIP, {"score": 95, "_style": {"score": "good"}})
+        msg = _render_metrics(FLAGSHIP, {"score": 95, "_style": {"score": "good"}})
         all_chars = [cell for row in msg.grid for cell in row if isinstance(cell, str)]
         self.assertNotIn("_STYLE", "".join(all_chars))
 
     def test_color_indicator_right_edge_on_positive_change(self):
-        msg = render_metrics(FLAGSHIP, {"score_change": 10.0})
+        msg = _render_metrics(FLAGSHIP, {"score_change": 10.0})
         color_cells = [row[-1] for row in msg.grid if isinstance(row[-1], Color)]
         self.assertTrue(any(c == Color.GREEN for c in color_cells))
 
     def test_color_indicator_red_on_negative_change(self):
-        msg = render_metrics(FLAGSHIP, {"score_change": -5.0})
+        msg = _render_metrics(FLAGSHIP, {"score_change": -5.0})
         color_cells = [row[-1] for row in msg.grid if isinstance(row[-1], Color)]
         self.assertTrue(any(c == Color.RED for c in color_cells))
 
     def test_pct_key_no_color_without_style(self):
         # _pct alone does not auto-color; need _style or a directional word in key
-        msg = render_metrics(FLAGSHIP, {"score_pct": 10.0})
+        msg = _render_metrics(FLAGSHIP, {"score_pct": 10.0})
         color_cells = [row[-1] for row in msg.grid if isinstance(row[-1], Color)]
         self.assertEqual(color_cells, [])
 
     def test_no_indicator_for_plain_field(self):
-        msg = render_metrics(FLAGSHIP, {"score": 95})
+        msg = _render_metrics(FLAGSHIP, {"score": 95})
         color_cells = [row[-1] for row in msg.grid if isinstance(row[-1], Color)]
         self.assertEqual(color_cells, [])
 
     def test_style_override_drives_color(self):
         data = {"revenue": 1000, "_style": {"revenue": "warn"}}
-        msg = render_metrics(FLAGSHIP, data)
+        msg = _render_metrics(FLAGSHIP, data)
         color_cells = [row[-1] for row in msg.grid if isinstance(row[-1], Color)]
         self.assertTrue(any(c == Color.YELLOW for c in color_cells))
 
     def test_with_title_uses_first_row(self):
-        msg = render_metrics(FLAGSHIP, {"val": 42}, title="DASHBOARD")
+        msg = _render_metrics(FLAGSHIP, {"val": 42}, title="DASHBOARD")
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         self.assertIn("DASHBOARD", all_chars)
 
     def test_to_characters_all_ints(self):
-        msg = render_metrics(FLAGSHIP, {"score_pct": 5.0})
+        msg = _render_metrics(FLAGSHIP, {"score_pct": 5.0})
         chars = msg.to_characters()
         self.assertEqual(len(chars), 6)
         self.assertEqual(len(chars[0]), 22)
         self.assertTrue(all(isinstance(v, int) for row in chars for v in row))
 
     def test_color_code_in_characters(self):
-        msg = render_metrics(FLAGSHIP, {"score_change": 5.0})
+        msg = _render_metrics(FLAGSHIP, {"score_change": 5.0})
         chars = msg.to_characters()
         # Color.GREEN = 66 should appear somewhere in the right-most column
         right_col = [row[-1] for row in chars]
@@ -483,7 +483,7 @@ class TestRenderMetrics(unittest.TestCase):
 
 class TestValign(unittest.TestCase):
     def test_top_aligns_to_row_zero(self):
-        msg = render_metrics(FLAGSHIP, {"score": 95}, valign="top")
+        msg = _render_metrics(FLAGSHIP, {"score": 95}, valign="top")
         first_content_row = next(
             i for i, row in enumerate(msg.grid)
             if any(c != " " for c in row)
@@ -491,7 +491,7 @@ class TestValign(unittest.TestCase):
         self.assertEqual(first_content_row, 0)
 
     def test_center_offsets_from_top(self):
-        msg = render_metrics(FLAGSHIP, {"score": 95}, valign="center")
+        msg = _render_metrics(FLAGSHIP, {"score": 95}, valign="center")
         first_content_row = next(
             i for i, row in enumerate(msg.grid)
             if any(c != " " for c in row)
@@ -500,7 +500,7 @@ class TestValign(unittest.TestCase):
 
     def test_center_content_is_roughly_middle(self):
         # 1 entry on a 6-row board should center around row 2-3
-        msg = render_metrics(FLAGSHIP, {"score": 95}, valign="center")
+        msg = _render_metrics(FLAGSHIP, {"score": 95}, valign="center")
         first_content_row = next(
             i for i, row in enumerate(msg.grid)
             if any(c != " " for c in row)
@@ -510,21 +510,21 @@ class TestValign(unittest.TestCase):
     def test_full_board_same_regardless_of_valign(self):
         # When entries fill the board, top and center produce the same result
         data = {f"k{i}": i for i in range(6)}
-        top = render_metrics(FLAGSHIP, data, valign="top").to_characters()
-        center = render_metrics(FLAGSHIP, data, valign="center").to_characters()
+        top = _render_metrics(FLAGSHIP, data, valign="top").to_characters()
+        center = _render_metrics(FLAGSHIP, data, valign="center").to_characters()
         self.assertEqual(top, center)
 
 
 class TestAlign(unittest.TestCase):
     def test_left_starts_at_col_zero(self):
-        msg = render_metrics(FLAGSHIP, {"score": 95}, align="left")
+        msg = _render_metrics(FLAGSHIP, {"score": 95}, align="left")
         first_content_col = next(
             i for i, c in enumerate(msg.grid[0]) if c != " "
         )
         self.assertEqual(first_content_col, 0)
 
     def test_center_starts_after_col_zero(self):
-        msg = render_metrics(FLAGSHIP, {"score": 95}, align="center")
+        msg = _render_metrics(FLAGSHIP, {"score": 95}, align="center")
         first_content_col = next(
             i for i, c in enumerate(msg.grid[0]) if c != " "
         )
@@ -533,7 +533,7 @@ class TestAlign(unittest.TestCase):
     def test_center_all_rows_same_start_col(self):
         # All content rows should start at the same left offset
         data = {"temp": 68, "humidity": 42, "wind_delta": 3.2}
-        msg = render_metrics(FLAGSHIP, data, align="center")
+        msg = _render_metrics(FLAGSHIP, data, align="center")
         start_cols = [
             next((i for i, c in enumerate(row) if c != " "), None)
             for row in msg.grid
@@ -543,7 +543,7 @@ class TestAlign(unittest.TestCase):
 
     def test_center_color_tile_adjacent_to_value(self):
         # No space between value and color tile in centered layout
-        msg = render_metrics(FLAGSHIP, {"score_pct": 5.0}, align="center")
+        msg = _render_metrics(FLAGSHIP, {"score_pct": 5.0}, align="center")
         for row in msg.grid:
             for i, cell in enumerate(row):
                 if isinstance(cell, Color):
@@ -553,11 +553,11 @@ class TestAlign(unittest.TestCase):
         # Centered and left layouts should encode to the same non-space characters
         data = {"score": 95, "count": 42}
         left_chars = set(
-            c for row in render_metrics(FLAGSHIP, data, align="left").grid
+            c for row in _render_metrics(FLAGSHIP, data, align="left").grid
             for c in row if c != " "
         )
         center_chars = set(
-            c for row in render_metrics(FLAGSHIP, data, align="center").grid
+            c for row in _render_metrics(FLAGSHIP, data, align="center").grid
             for c in row if c != " "
         )
         self.assertEqual(left_chars, center_chars)
@@ -565,30 +565,30 @@ class TestAlign(unittest.TestCase):
 
 class TestTimestamp(unittest.TestCase):
     def test_timestamp_placed_when_last_row_empty(self):
-        msg = render_metrics(FLAGSHIP, {"score": 95}, valign="top")
+        msg = _render_metrics(FLAGSHIP, {"score": 95}, valign="top")
         before = list(msg.grid[-1])
-        msg = place_timestamp(msg)
+        msg = _place_timestamp(msg)
         # Last row should have changed
         self.assertNotEqual(msg.grid[-1], before)
 
     def test_timestamp_skipped_when_last_row_full(self):
         # Fill all 6 rows so last row has content
         data = {f"k{i}": i for i in range(FLAGSHIP.rows)}
-        msg = render_metrics(FLAGSHIP, data, valign="top")
+        msg = _render_metrics(FLAGSHIP, data, valign="top")
         last_row_before = list(msg.grid[-1])
-        msg = place_timestamp(msg)
+        msg = _place_timestamp(msg)
         self.assertEqual(msg.grid[-1], last_row_before)
 
     def test_force_timestamp_overwrites(self):
         data = {f"k{i}": i for i in range(FLAGSHIP.rows)}
-        msg = render_metrics(FLAGSHIP, data, valign="top")
+        msg = _render_metrics(FLAGSHIP, data, valign="top")
         last_row_before = list(msg.grid[-1])
-        msg = place_timestamp(msg, force=True)
+        msg = _place_timestamp(msg, force=True)
         self.assertNotEqual(msg.grid[-1], last_row_before)
 
     def test_timestamp_is_right_aligned(self):
-        msg = render_metrics(FLAGSHIP, {"score": 95}, valign="top")
-        msg = place_timestamp(msg)
+        msg = _render_metrics(FLAGSHIP, {"score": 95}, valign="top")
+        msg = _place_timestamp(msg)
         last_row = msg.grid[-1]
         # Last cell should not be a space (timestamp ends at right edge)
         self.assertNotEqual(last_row[-1], " ")
@@ -634,17 +634,17 @@ class TestRenderText(unittest.TestCase):
         self.assertEqual(msg_default.grid, msg_center.grid)
 
     def test_valign_top_via_build_message(self):
-        # Integration: valign must thread through build_message → render_text
-        from vesta import build_message
-        msg = build_message(FLAGSHIP, "text", "HELLO", None, valign="top")
+        # Integration: valign must thread through _build_message → render_text
+        from vesta import _build_message
+        msg = _build_message(FLAGSHIP, "text", "HELLO", None, valign="top")
         row0_chars = [c for c in msg.grid[0] if isinstance(c, str) and c != " "]
-        self.assertTrue(len(row0_chars) > 0, "Expected content in row 0 for valign=top via build_message")
+        self.assertTrue(len(row0_chars) > 0, "Expected content in row 0 for valign=top via _build_message")
 
     def test_valign_center_via_build_message(self):
-        from vesta import build_message
-        msg = build_message(FLAGSHIP, "text", "HELLO", None, valign="center")
+        from vesta import _build_message
+        msg = _build_message(FLAGSHIP, "text", "HELLO", None, valign="center")
         row0_chars = [c for c in msg.grid[0] if isinstance(c, str) and c != " "]
-        self.assertEqual(row0_chars, [], "Expected row 0 blank for valign=center via build_message")
+        self.assertEqual(row0_chars, [], "Expected row 0 blank for valign=center via _build_message")
 
 
 class TestRenderKv(unittest.TestCase):
@@ -904,37 +904,37 @@ class TestSeparator(unittest.TestCase):
         self.assertGreater(len(without_chars), len(with_chars))
 
     def test_separator_via_cli(self):
-        from vesta import build_message
-        msg = build_message(FLAGSHIP, "kv", {"temp": 72}, None, separator="rainbow")
+        from vesta import _build_message
+        msg = _build_message(FLAGSHIP, "kv", {"temp": 72}, None, separator="rainbow")
         self.assertTrue(all(isinstance(c, Color) for c in msg.grid[0]))
 
     def test_place_separator_unknown_color_defaults_to_white(self):
         grid = [[" "] * FLAGSHIP.cols for _ in range(FLAGSHIP.rows)]
-        place_separator(grid, 0, "notacolor")
+        _place_separator(grid, 0, "notacolor")
         self.assertTrue(all(c == Color.WHITE for c in grid[0]))
 
 
 class TestRenderTable(unittest.TestCase):
     def test_empty_rows_shows_no_data(self):
-        msg = render_table(FLAGSHIP, [])
+        msg = _render_table(FLAGSHIP, [])
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         self.assertIn("NO DATA", all_chars)
 
     def test_grid_dimensions(self):
         rows = [{"name": "alice", "score": 10}, {"name": "bob", "score": 20}]
-        msg = render_table(FLAGSHIP, rows)
+        msg = _render_table(FLAGSHIP, rows)
         self.assertEqual(len(msg.grid), 6)
         self.assertEqual(len(msg.grid[0]), 22)
 
     def test_grid_dimensions_note(self):
         rows = [{"name": "alice", "score": 10}, {"name": "bob", "score": 20}]
-        msg = render_table(NOTE, rows)
+        msg = _render_table(NOTE, rows)
         self.assertEqual(len(msg.grid), 3)
         self.assertEqual(len(msg.grid[0]), 15)
 
     def test_note_fits_header_and_data(self):
         rows = [{"name": "alice", "score": 10}, {"name": "bob", "score": 20}]
-        msg = render_table(NOTE, rows)
+        msg = _render_table(NOTE, rows)
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         # header row should be present
         self.assertIn("NAME", all_chars)
@@ -996,27 +996,27 @@ class TestRenderData(unittest.TestCase):
 
 class TestFormatField(unittest.TestCase):
     def test_pct_suffix_formats_as_percent(self):
-        _, value, _ = format_field("score_pct", 21.32, FLAGSHIP)
+        _, value, _ = _format_field("score_pct", 21.32, FLAGSHIP)
         self.assertIn("%", value)
 
     def test_curr_suffix_formats_as_currency(self):
-        _, value, _ = format_field("revenue_curr", 84210.50, FLAGSHIP)
+        _, value, _ = _format_field("revenue_curr", 84210.50, FLAGSHIP)
         self.assertIn("$", value)
 
     def test_pct_auto_tone(self):
-        _, _, color = format_field("change_pct", 5.0, FLAGSHIP)
+        _, _, color = _format_field("change_pct", 5.0, FLAGSHIP)
         self.assertEqual(color, Color.GREEN)
 
     def test_negative_pct_auto_tone(self):
-        _, _, color = format_field("change_pct", -5.0, FLAGSHIP)
+        _, _, color = _format_field("change_pct", -5.0, FLAGSHIP)
         self.assertEqual(color, Color.RED)
 
     def test_plain_field_no_color(self):
-        _, _, color = format_field("sessions", 1000, FLAGSHIP)
+        _, _, color = _format_field("sessions", 1000, FLAGSHIP)
         self.assertIsNone(color)
 
     def test_style_override(self):
-        _, _, color = format_field("sessions", 1000, FLAGSHIP, style={"sessions": "good"})
+        _, _, color = _format_field("sessions", 1000, FLAGSHIP, style={"sessions": "good"})
         self.assertEqual(color, Color.GREEN)
 
 
@@ -1033,11 +1033,11 @@ class TestPreview(unittest.TestCase):
         self.assertIn("flagship", msg.preview(ansi_color=False))
 
     def test_no_ansi_no_escape_sequences(self):
-        msg = render_metrics(FLAGSHIP, {"score_change": 5.0})
+        msg = _render_metrics(FLAGSHIP, {"score_change": 5.0})
         self.assertNotIn("\033[", msg.preview(ansi_color=False))
 
     def test_ansi_enabled_has_escape_sequences(self):
-        msg = render_metrics(FLAGSHIP, {"score_change": 5.0})
+        msg = _render_metrics(FLAGSHIP, {"score_change": 5.0})
         self.assertIn("\033[", msg.preview(ansi_color=True))
 
     def test_flagship_line_count(self):
@@ -1065,44 +1065,44 @@ class TestPreview(unittest.TestCase):
 
 class TestExplainMetrics(unittest.TestCase):
     def test_auto_tone_field_labeled_auto(self):
-        result = explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=False)
+        result = _explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=False)
         self.assertIn("auto", result)
 
     def test_explicit_style_labeled_tone(self):
         data = {"score": 90, "_style": {"score": "good"}}
-        result = explain_metrics(data, FLAGSHIP, ansi_color=False)
+        result = _explain_metrics(data, FLAGSHIP, ansi_color=False)
         self.assertIn("tone: good", result)
 
     def test_range_style_labeled_range(self):
         data = {"bounce": 55.0, "_style": {"bounce": {"good": 30, "bad": 80}}}
-        result = explain_metrics(data, FLAGSHIP, ansi_color=False)
+        result = _explain_metrics(data, FLAGSHIP, ansi_color=False)
         self.assertIn("range", result)
 
     def test_range_style_shows_thresholds(self):
         data = {"bounce": 55.0, "_style": {"bounce": {"good": 30, "bad": 80}}}
-        result = explain_metrics(data, FLAGSHIP, ansi_color=False)
+        result = _explain_metrics(data, FLAGSHIP, ansi_color=False)
         self.assertIn("good=30", result)
         self.assertIn("bad=80", result)
 
     def test_no_color_fields_returns_empty(self):
-        result = explain_metrics({"score": 42}, FLAGSHIP, ansi_color=False)
+        result = _explain_metrics({"score": 42}, FLAGSHIP, ansi_color=False)
         self.assertEqual(result, "")
 
     def test_underscore_keys_excluded(self):
         data = {"change_pct": 5.0, "_style": {"change_pct": "good"}}
-        result = explain_metrics(data, FLAGSHIP, ansi_color=False)
+        result = _explain_metrics(data, FLAGSHIP, ansi_color=False)
         self.assertNotIn("_style", result)
 
     def test_header_line_present(self):
-        result = explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=False)
+        result = _explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=False)
         self.assertIn("color indicators", result)
 
     def test_no_ansi_no_escape_sequences(self):
-        result = explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=False)
+        result = _explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=False)
         self.assertNotIn("\033[", result)
 
     def test_ansi_color_has_escape_sequences(self):
-        result = explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=True)
+        result = _explain_metrics({"change_pct": 5.0}, FLAGSHIP, ansi_color=True)
         self.assertIn("\033[", result)
 
 
@@ -1111,7 +1111,7 @@ class TestLoadPayload(unittest.TestCase):
         """Helper: parse s as if it came from stdin."""
         import unittest.mock as mock
         with mock.patch("sys.stdin", io.StringIO(s)):
-            return load_payload(None)
+            return _load_payload(None)
 
     def test_json_dict(self):
         result = self._load_str('{"a": 1}')
@@ -1164,9 +1164,9 @@ class TestLoadPayload(unittest.TestCase):
         """)
         json_input = '[{"name": "alice", "score": 98, "rank": 1}, {"name": "bob", "score": 87, "rank": 2}]'
         with __import__("unittest.mock", fromlist=["mock"]).patch("sys.stdin", io.StringIO(csv_input)):
-            csv_payload = load_payload(None)
+            csv_payload = _load_payload(None)
         with __import__("unittest.mock", fromlist=["mock"]).patch("sys.stdin", io.StringIO(json_input)):
-            json_payload = load_payload(None)
+            json_payload = _load_payload(None)
         csv_msg = render_data(FLAGSHIP, csv_payload)
         json_msg = render_data(FLAGSHIP, json_payload)
         self.assertEqual(csv_msg.grid, json_msg.grid)
@@ -1201,7 +1201,7 @@ class TestNoteEdgeCases(unittest.TestCase):
         # 1 kv pair on NOTE uses rows 0 and 1; row 2 is blank → timestamp fits.
         msg = render_kv(NOTE, {"temp": 72})
         last_before = list(msg.grid[-1])
-        msg = place_timestamp(msg)
+        msg = _place_timestamp(msg)
         self.assertNotEqual(msg.grid[-1], last_before)
 
     def test_timestamp_skipped_on_note_when_last_row_full(self):
@@ -1209,18 +1209,18 @@ class TestNoteEdgeCases(unittest.TestCase):
         # The value occupies the rightmost cell, which blocks the timestamp buffer.
         msg = render_kv(NOTE, {"a": 1}, title="T")
         last_before = list(msg.grid[-1])
-        msg = place_timestamp(msg)
+        msg = _place_timestamp(msg)
         self.assertEqual(msg.grid[-1], last_before)
 
     def test_force_timestamp_on_note_overwrites(self):
         msg = render_kv(NOTE, {"a": 1, "b": 2})
         last_before = list(msg.grid[-1])
-        msg = place_timestamp(msg, force=True)
+        msg = _place_timestamp(msg, force=True)
         self.assertNotEqual(msg.grid[-1], last_before)
 
     def test_timestamp_right_aligned_on_note(self):
         msg = render_kv(NOTE, {"temp": 72})
-        msg = place_timestamp(msg)
+        msg = _place_timestamp(msg)
         self.assertNotEqual(msg.grid[-1][-1], " ")
 
     # ---- many-column table on NOTE (column dropping) ----
@@ -1234,7 +1234,7 @@ class TestNoteEdgeCases(unittest.TestCase):
         orig = sys.stderr
         sys.stderr = stderr_capture
         try:
-            msg = render_table(NOTE, rows)
+            msg = _render_table(NOTE, rows)
         finally:
             sys.stderr = orig
         self.assertIn("dropped", stderr_capture.getvalue())
@@ -1247,7 +1247,7 @@ class TestNoteEdgeCases(unittest.TestCase):
         orig = sys.stderr
         sys.stderr = stderr_capture
         try:
-            render_table(NOTE, rows)
+            _render_table(NOTE, rows)
         finally:
             sys.stderr = orig
         warning = stderr_capture.getvalue()
@@ -1263,7 +1263,7 @@ class TestNoteEdgeCases(unittest.TestCase):
         orig = sys.stderr
         sys.stderr = stderr_capture
         try:
-            msg = render_table(NOTE, rows)
+            msg = _render_table(NOTE, rows)
         finally:
             sys.stderr = orig
         self.assertIn("dropped", stderr_capture.getvalue())
@@ -1275,7 +1275,7 @@ class TestNoteEdgeCases(unittest.TestCase):
         orig = sys.stderr
         sys.stderr = stderr_capture
         try:
-            render_table(NOTE, rows)
+            _render_table(NOTE, rows)
         finally:
             sys.stderr = orig
         self.assertEqual(stderr_capture.getvalue(), "")
@@ -1424,18 +1424,18 @@ class TestCliExplain(unittest.TestCase):
         self.assertIn("range", out)
 
     def test_title_newline_splits_into_subtitle(self):
-        from vesta import build_message
-        msg_newline = build_message(FLAGSHIP, "kv", {"temp": 72}, "Weather\nToday",
+        from vesta import _build_message
+        msg_newline = _build_message(FLAGSHIP, "kv", {"temp": 72}, "Weather\nToday",
                                     title_color=Color.WHITE)
-        msg_explicit = build_message(FLAGSHIP, "kv", {"temp": 72}, "Weather",
+        msg_explicit = _build_message(FLAGSHIP, "kv", {"temp": 72}, "Weather",
                                      title_color=Color.WHITE, subtitle="Today")
         self.assertEqual(msg_newline.grid, msg_explicit.grid)
 
     def test_title_newline_explicit_subtitle_wins(self):
-        from vesta import build_message
-        msg_with_newline_sub = build_message(FLAGSHIP, "kv", {"temp": 72}, "Weather\nFromNewline",
+        from vesta import _build_message
+        msg_with_newline_sub = _build_message(FLAGSHIP, "kv", {"temp": 72}, "Weather\nFromNewline",
                                              title_color=Color.WHITE, subtitle="Explicit")
-        msg_direct = build_message(FLAGSHIP, "kv", {"temp": 72}, "Weather",
+        msg_direct = _build_message(FLAGSHIP, "kv", {"temp": 72}, "Weather",
                                    title_color=Color.WHITE, subtitle="Explicit")
         self.assertEqual(msg_with_newline_sub.grid, msg_direct.grid)
 

@@ -6,6 +6,22 @@ try:
 except Exception:
     __version__ = "0.3.0"  # fallback when running from source uninstalled
 
+__all__ = [
+    "BoardProfile",
+    "FLAGSHIP",
+    "NOTE",
+    "PROFILES",
+    "Color",
+    "RenderedMessage",
+    "render_text",
+    "render_kv",
+    "render_data",
+    "render_auto",
+    "post_cloud",
+    "post_local",
+    "read_cloud",
+]
+
 import argparse
 import csv
 import io
@@ -76,13 +92,13 @@ COLOR_TO_ANSI: dict[Color, str] = {
     Color.BLACK: "\033[90m",
     Color.FILLED: "\033[97m",
 }
-ANSI_RESET = "\033[0m"
+_ANSI_RESET = "\033[0m"
 
 
 # NOTE: Experimental semantic tone support. Callers use tone names ("good", "bad",
 # etc.) rather than placing Color values directly. This is the intended public
 # surface for color support — not raw Color placement in grids.
-TONE_TO_COLOR: dict[str, Color] = {
+_TONE_TO_COLOR: dict[str, Color] = {
     "good": Color.GREEN,
     "bad": Color.RED,
     "warn": Color.YELLOW,
@@ -111,13 +127,13 @@ TONE_TO_COLOR: dict[str, Color] = {
 # -----------------------------------------------------------------------------
 
 
-CHAR_TO_CODE: dict[str, int] = {" ": 0}
+_CHAR_TO_CODE: dict[str, int] = {" ": 0}
 for _i, _ch in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ", start=1):
-    CHAR_TO_CODE[_ch] = _i
+    _CHAR_TO_CODE[_ch] = _i
 for _i, _ch in enumerate("1234567890", start=27):
-    CHAR_TO_CODE[_ch] = _i
+    _CHAR_TO_CODE[_ch] = _i
 
-CHAR_TO_CODE.update(
+_CHAR_TO_CODE.update(
     {
         "!": 37,
         "@": 38,
@@ -140,7 +156,7 @@ CHAR_TO_CODE.update(
         "?": 60,
         # Code 62 is a hardware quirk: Flagship renders it as ° (degree symbol),
         # Note renders it as ❤ (heart). Both characters map to code 62 here;
-        # encode_cell handles the per-profile swap at encoding time.
+        # _encode_cell handles the per-profile swap at encoding time.
         "°": 62,
         "❤": 62,
     }
@@ -149,33 +165,33 @@ CHAR_TO_CODE.update(
 
 # -----------------------------------------------------------------------------
 # Core render model
-# A Cell is either a single text character (str, len == 1) or a Color tile.
-# Grid is a 2-D list of cells with dimensions matching the board profile exactly.
+# A _Cell is either a single text character (str, len == 1) or a Color tile.
+# _Grid is a 2-D list of cells with dimensions matching the board profile exactly.
 # -----------------------------------------------------------------------------
 
 
-Cell = str | Color  # str: single printable char; Color: colored tile
-Grid = list[list[Cell]]
+_Cell = str | Color  # str: single printable char; Color: colored tile
+_Grid = list[list[_Cell]]
 
 
 @dataclass
 class RenderedMessage:
     profile: BoardProfile
-    grid: Grid
+    grid: _Grid
 
     def to_characters(self) -> list[list[int]]:
         """Encode the grid to Vestaboard character codes."""
-        return [[encode_cell(cell, self.profile) for cell in row] for row in self.grid]
+        return [[_encode_cell(cell, self.profile) for cell in row] for row in self.grid]
 
     def preview(self, visible_spaces: bool = True, cell_width: int = 2, ansi_color: bool = True) -> str:
         """Render a terminal-friendly preview of the board."""
         cell_width = max(1, cell_width)
 
-        def show(cell: Cell) -> str:
+        def show(cell: _Cell) -> str:
             if isinstance(cell, Color):
                 block = "█" * cell_width
                 if ansi_color and cell in COLOR_TO_ANSI:
-                    return f"{COLOR_TO_ANSI[cell]}{block}{ANSI_RESET}"
+                    return f"{COLOR_TO_ANSI[cell]}{block}{_ANSI_RESET}"
                 return block
             if cell == " ":
                 ch = "·" if visible_spaces else " "
@@ -199,23 +215,23 @@ class RenderedMessage:
 # -----------------------------------------------------------------------------
 
 
-def blank_grid(profile: BoardProfile, fill: str = " ") -> Grid:
+def _blank_grid(profile: BoardProfile, fill: str = " ") -> _Grid:
     return [[fill for _ in range(profile.cols)] for _ in range(profile.rows)]
 
 
-def normalize_text(text: str) -> str:
+def _normalize_text(text: str) -> str:
     return text.upper().replace("\t", " ")
 
 
-def ellipsize(text: str, width: int) -> str:
+def _ellipsize(text: str, width: int) -> str:
     """Hard-truncate text to fit within width. No truncation marker — the board
     has no ellipsis character and there is rarely space to spare."""
-    text = normalize_text(text)
+    text = _normalize_text(text)
     return text[:width]
 
 
-def wrap_text(text: str, width: int, max_lines: int) -> list[str]:
-    words = normalize_text(text).split()
+def _wrap_text(text: str, width: int, max_lines: int) -> list[str]:
+    words = _normalize_text(text).split()
     if not words:
         return [""]
     lines: list[str] = []
@@ -241,15 +257,15 @@ def wrap_text(text: str, width: int, max_lines: int) -> list[str]:
     if words and len(lines) == max_lines:
         consumed = sum(len(line.split()) for line in lines)
         if consumed < len(words):
-            lines[-1] = ellipsize(lines[-1], width)
+            lines[-1] = _ellipsize(lines[-1], width)
     return [line.ljust(width)[:width] for line in lines]
 
 
-def place_line(grid: Grid, row_idx: int, text: str, align: str = "left", start_col: int = 0) -> None:
+def _place_line(grid: _Grid, row_idx: int, text: str, align: str = "left", start_col: int = 0) -> None:
     available_width = len(grid[row_idx]) - start_col
     if available_width <= 0:
         return
-    text = ellipsize(text, available_width)
+    text = _ellipsize(text, available_width)
     if align == "center":
         start = start_col + max(0, (available_width - len(text)) // 2)
     elif align == "right":
@@ -260,12 +276,12 @@ def place_line(grid: Grid, row_idx: int, text: str, align: str = "left", start_c
         grid[row_idx][start + i] = ch
 
 
-def place_cell(grid: Grid, row_idx: int, col_idx: int, value: Cell) -> None:
+def _place_cell(grid: _Grid, row_idx: int, col_idx: int, value: _Cell) -> None:
     if 0 <= row_idx < len(grid) and 0 <= col_idx < len(grid[row_idx]):
         grid[row_idx][col_idx] = value
 
 
-def place_title_row(grid: Grid, row_idx: int, text: str, color: Color | list[Color]) -> None:
+def _place_title_row(grid: _Grid, row_idx: int, text: str, color: Color | list[Color]) -> None:
     """Place a title row with colored tile bookends, text centered between them.
     color may be a single Color (tries 2 tiles then 1) or a list of 1–3 Colors
     (tries len(colors) tiles then fewer). Right side mirrors the left (reversed).
@@ -287,7 +303,7 @@ def place_title_row(grid: Grid, row_idx: int, text: str, color: Color | list[Col
                 grid[row_idx][start + i] = ch
             return
     # Text fills the whole row — render plain so it isn't dropped entirely.
-    place_line(grid, row_idx, text, align="center")
+    _place_line(grid, row_idx, text, align="center")
 
 
 def _lead_color(color: Color | list[Color] | None, default: Color = Color.WHITE) -> Color:
@@ -297,7 +313,7 @@ def _lead_color(color: Color | list[Color] | None, default: Color = Color.WHITE)
     return color[0] if isinstance(color, list) else color
 
 
-def place_subtitle_row(grid: Grid, row_idx: int, text: str, color: Color) -> None:
+def _place_subtitle_row(grid: _Grid, row_idx: int, text: str, color: Color) -> None:
     """Place a subtitle row with a single colored tile bookend on each side.
     Falls back to plain centered text if the text is too long to fit with tiles."""
     cols = len(grid[row_idx])
@@ -310,35 +326,35 @@ def place_subtitle_row(grid: Grid, row_idx: int, text: str, color: Color) -> Non
         for i, ch in enumerate(text):
             grid[row_idx][start + i] = ch
     else:
-        place_line(grid, row_idx, text, align="center")
+        _place_line(grid, row_idx, text, align="center")
 
 
-SEPARATOR_PATTERNS: dict[str, list[Color]] = {
+_SEPARATOR_PATTERNS: dict[str, list[Color]] = {
     "rainbow": [Color.RED, Color.ORANGE, Color.YELLOW, Color.GREEN, Color.BLUE, Color.VIOLET],
 }
 
 
-def place_separator(grid: Grid, row_idx: int, pattern: str) -> None:
+def _place_separator(grid: _Grid, row_idx: int, pattern: str) -> None:
     """Fill a row with a repeating color pattern.
     Accepts a named pattern ('rainbow'), a single color name ('white'),
     or comma-separated color names ('red,black')."""
     cols = len(grid[row_idx])
     key = pattern.strip().lower()
-    if key in SEPARATOR_PATTERNS:
-        colors = SEPARATOR_PATTERNS[key]
+    if key in _SEPARATOR_PATTERNS:
+        colors = _SEPARATOR_PATTERNS[key]
     else:
-        colors = [tone_to_color(p.strip()) or Color.WHITE for p in key.split(",")]
+        colors = [_tone_to_color(p.strip()) or Color.WHITE for p in key.split(",")]
     for col in range(cols):
         grid[row_idx][col] = colors[col % len(colors)]
 
 
-def header_row_count(title: str | None, subtitle: str | None, separator: str | None) -> int:
+def _header_row_count(title: str | None, subtitle: str | None, separator: str | None) -> int:
     """Return the number of rows consumed by the title block."""
     return (1 if title else 0) + (1 if subtitle and title else 0) + (1 if separator else 0)
 
 
-def place_header(
-    grid: Grid,
+def _place_header(
+    grid: _Grid,
     profile: BoardProfile,
     title: str | None,
     title_color: Color | list[Color] | None,
@@ -351,15 +367,15 @@ def place_header(
     row = start_row
     if title:
         if title_color is not None:
-            place_title_row(grid, row, title, title_color)
+            _place_title_row(grid, row, title, title_color)
         else:
-            place_line(grid, row, title, align="center")
+            _place_line(grid, row, title, align="center")
         row += 1
     if subtitle and title and row < profile.rows:
-        place_subtitle_row(grid, row, subtitle, _lead_color(subtitle_color or title_color))
+        _place_subtitle_row(grid, row, subtitle, _lead_color(subtitle_color or title_color))
         row += 1
     if separator and row < profile.rows:
-        place_separator(grid, row, separator)
+        _place_separator(grid, row, separator)
         row += 1
     return row
 
@@ -369,19 +385,19 @@ def place_header(
 # -----------------------------------------------------------------------------
 
 
-# Inverse of CHAR_TO_CODE. Code 62 always decodes to ° (degree symbol) —
+# Inverse of _CHAR_TO_CODE. Code 62 always decodes to ° (degree symbol) —
 # the heart glyph on the Note is a display quirk, not a separate character.
-CODE_TO_CHAR: dict[int, str] = {v: k for k, v in CHAR_TO_CODE.items()}
+CODE_TO_CHAR: dict[int, str] = {v: k for k, v in _CHAR_TO_CODE.items()}
 CODE_TO_CHAR[62] = "°"
 
 
-def from_characters(chars: list[list[int]], profile: BoardProfile) -> RenderedMessage:
+def _from_characters(chars: list[list[int]], profile: BoardProfile) -> RenderedMessage:
     """Reconstruct a RenderedMessage from a raw Vestaboard character code grid."""
     # Code 62 hardware quirk: decode to the correct glyph for the profile.
     code62 = "❤" if profile.name == "note" else "°"
-    grid: Grid = []
+    grid: _Grid = []
     for row in chars:
-        grid_row: list[Cell] = []
+        grid_row: list[_Cell] = []
         for code in row:
             if 63 <= code <= 71:
                 grid_row.append(Color(code))
@@ -393,7 +409,7 @@ def from_characters(chars: list[list[int]], profile: BoardProfile) -> RenderedMe
     return RenderedMessage(profile=profile, grid=grid)
 
 
-def is_raw_grid(payload: Any, profile: BoardProfile) -> bool:
+def _is_raw_grid(payload: Any, profile: BoardProfile) -> bool:
     """Return True if payload looks like a Vestaboard character code grid for this profile."""
     return (
         isinstance(payload, list)
@@ -407,17 +423,17 @@ def is_raw_grid(payload: Any, profile: BoardProfile) -> bool:
     )
 
 
-def encode_cell(cell: Cell, profile: BoardProfile) -> int:
+def _encode_cell(cell: _Cell, profile: BoardProfile) -> int:
     if isinstance(cell, Color):
         return int(cell)
 
-    ch = normalize_text(cell[:1] if cell else " ")
+    ch = _normalize_text(cell[:1] if cell else " ")
     # Code 62 hardware quirk: normalize regardless of which symbol the caller used.
     if ch == "❤" and profile.name != "note":
         ch = "°"
     if ch == "°" and profile.name == "note":
         ch = "❤"
-    return CHAR_TO_CODE.get(ch, 0)
+    return _CHAR_TO_CODE.get(ch, 0)
 
 
 # -----------------------------------------------------------------------------
@@ -425,7 +441,7 @@ def encode_cell(cell: Cell, profile: BoardProfile) -> int:
 # -----------------------------------------------------------------------------
 
 
-def format_scalar(value: Any) -> str:
+def _format_scalar(value: Any) -> str:
     if isinstance(value, float):
         if abs(value) >= 1_000_000:
             return f"{value / 1_000_000:.2f}M"
@@ -439,24 +455,24 @@ _PCT_SUFFIXES = ("_pct", "_percent")
 _CURR_SUFFIXES = ("_curr",)
 
 
-def key_is_pct(key: str) -> bool:
+def _key_is_pct(key: str) -> bool:
     lower = key.lower()
     return any(lower.endswith(s) for s in _PCT_SUFFIXES)
 
 
-def key_is_curr(key: str) -> bool:
+def _key_is_curr(key: str) -> bool:
     lower = key.lower()
     return any(lower.endswith(s) for s in _CURR_SUFFIXES)
 
 
-def prettify_label(key: str) -> str:
-    label = normalize_text(key)
+def _prettify_label(key: str) -> str:
+    label = _normalize_text(key)
     # Strip trailing suffixes where the formatting carries the meaning.
     label = re.sub(r"[_ ]+(PCT|PERCENT|CURR)$", "", label)
     return label.replace("_", " ").strip()
 
 
-def smart_round(value: float, sig_figs: int = 2) -> str:
+def _smart_round(value: float, sig_figs: int = 2) -> str:
     """Format a number to sig_figs significant figures, stripping trailing zeros."""
     if value == 0:
         return "0"
@@ -471,7 +487,7 @@ def smart_round(value: float, sig_figs: int = 2) -> str:
     return formatted
 
 
-def compact_number(value: float, decimals: int = 2) -> str:
+def _compact_number(value: float, decimals: int = 2) -> str:
     abs_value = abs(value)
     if abs_value >= 1_000_000_000:
         return f"{value / 1_000_000_000:.{decimals}f}".rstrip("0").rstrip(".") + "B"
@@ -482,7 +498,7 @@ def compact_number(value: float, decimals: int = 2) -> str:
     return f"{value:.2f}".rstrip("0").rstrip(".")
 
 
-def try_parse_datetime(value: Any) -> datetime | None:
+def _try_parse_datetime(value: Any) -> datetime | None:
     if isinstance(value, datetime):
         return value
     if not isinstance(value, str):
@@ -520,11 +536,11 @@ def try_parse_datetime(value: Any) -> datetime | None:
     return None
 
 
-def compact_datetime(value: Any, profile: BoardProfile) -> str:
-    dt = try_parse_datetime(value)
+def _compact_datetime(value: Any, profile: BoardProfile) -> str:
+    dt = _try_parse_datetime(value)
     if dt is None:
         max_len = 10 if profile.cols <= 15 else 12
-        return ellipsize(normalize_text(str(value)), max_len)
+        return _ellipsize(_normalize_text(str(value)), max_len)
 
     suffix = "A" if dt.hour < 12 else "P"
     hour_12 = dt.hour % 12 or 12
@@ -534,53 +550,53 @@ def compact_datetime(value: Any, profile: BoardProfile) -> str:
     return f"{dt.month}/{dt.day} {hour_12}:{dt.minute:02d}{suffix}"
 
 
-def format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
+def _format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
     if kind == "datetime":
-        return compact_datetime(value, profile)
+        return _compact_datetime(value, profile)
 
     if isinstance(value, (int, float)):
         n = float(value)
         if kind in ("currency", "currency_short"):
             if abs(n) >= 1_000:
-                return f"${compact_number(n)}"
+                return f"${_compact_number(n)}"
             return f"${n:.2f}"
         if kind == "percent":
-            return f"{smart_round(n, sig_figs=3)}%"
+            return f"{_smart_round(n, sig_figs=3)}%"
         if kind == "auto":
-            return compact_number(n)
+            return _compact_number(n)
     if kind == "percent":
-        s = normalize_text(format_scalar(value))
+        s = _normalize_text(_format_scalar(value))
         return s if s.endswith("%") else s + "%"
     if kind in ("currency", "currency_short"):
         try:
             n = float(str(value).lstrip("$").replace(",", "").strip())
             if abs(n) >= 1_000:
-                return f"${compact_number(n)}"
+                return f"${_compact_number(n)}"
             return f"${n:.2f}"
         except ValueError:
-            s = normalize_text(format_scalar(value))
+            s = _normalize_text(_format_scalar(value))
             return s if s.startswith("$") else "$" + s
         if kind == "number":
-            return compact_number(n if abs(n) >= 1000 else n, decimals=2 if abs(n) < 100 else 1)
+            return _compact_number(n if abs(n) >= 1000 else n, decimals=2 if abs(n) < 100 else 1)
         if kind == "auto":
-            return compact_number(n)
+            return _compact_number(n)
 
     if kind == "auto":
-        parsed_dt = try_parse_datetime(value)
+        parsed_dt = _try_parse_datetime(value)
         if parsed_dt is not None:
-            return compact_datetime(parsed_dt, profile)
+            return _compact_datetime(parsed_dt, profile)
 
-    return normalize_text(format_scalar(value))
+    return _normalize_text(_format_scalar(value))
 
 
-def infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: int) -> dict[str, int]:
+def _infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: int) -> dict[str, int]:
     if not columns:
         return {}
 
     natural = {}
     for col in columns:
         header = len(col.replace("_", " ").upper())
-        vals = [len(normalize_text(format_scalar(r.get(col, "")))) for r in rows]
+        vals = [len(_normalize_text(_format_scalar(r.get(col, "")))) for r in rows]
         natural[col] = max([header, *vals, 1])
 
     separators = max(0, len(columns) - 1)
@@ -606,7 +622,7 @@ def infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: in
 
 # -----------------------------------------------------------------------------
 # Tone resolution
-# NOTE: Experimental. Tones drive the trailing color indicator in render_metrics.
+# NOTE: Experimental. Tones drive the trailing color indicator in _render_metrics.
 # Auto-detection uses key name heuristics (change/delta/diff → positive/negative).
 # _pct/_percent only controls value formatting, not color. Use _style to add color
 # to percentage fields explicitly. Callers can override per-field via _style.
@@ -616,7 +632,7 @@ def infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: in
 # -----------------------------------------------------------------------------
 
 
-def tone_from_range(value: float, good: float, bad: float) -> str:
+def _tone_from_range(value: float, good: float, bad: float) -> str:
     """Map a value to a 4-step tone gradient between good (green) and bad (red).
     NOTE: Experimental — part of the range-based color support in _style."""
     if good == bad:
@@ -631,7 +647,7 @@ def tone_from_range(value: float, good: float, bad: float) -> str:
     return "bad"         # red
 
 
-def resolve_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
+def _resolve_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
     """Resolve a semantic tone for a field. Returns a tone name or None."""
     style = data.get("_style")
     if isinstance(style, dict) and key in style:
@@ -659,7 +675,7 @@ def resolve_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
         if isinstance(override, dict):
             # Range-based: {"good": <threshold>, "bad": <threshold>}
             if "good" in override and "bad" in override and isinstance(value, (int, float)):
-                return tone_from_range(float(value), float(override["good"]), float(override["bad"]))
+                return _tone_from_range(float(value), float(override["good"]), float(override["bad"]))
             tone = override.get("tone")
             if isinstance(tone, str):
                 return tone.lower()
@@ -672,7 +688,7 @@ def resolve_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
         n: float | None = None
         if isinstance(value, (int, float)):
             n = float(value)
-        elif isinstance(value, str) and key_is_pct(key):
+        elif isinstance(value, str) and _key_is_pct(key):
             # Coerce string values only for explicit _pct/_percent suffix keys —
             # "42" and "42%" are unambiguously percentages when the key declares it.
             try:
@@ -689,11 +705,11 @@ def resolve_tone(data: dict[str, Any], key: str, value: Any) -> str | None:
     return None
 
 
-def tone_to_color(tone: str | None) -> Color | None:
+def _tone_to_color(tone: str | None) -> Color | None:
     """Map a tone name to a Color tile, or None if the tone is unknown."""
     if not tone:
         return None
-    return TONE_TO_COLOR.get(tone.lower())
+    return _TONE_TO_COLOR.get(tone.lower())
 
 
 # -----------------------------------------------------------------------------
@@ -702,31 +718,31 @@ def tone_to_color(tone: str | None) -> Color | None:
 
 
 def render_text(profile: BoardProfile, text: str, align: str = "center", valign: str = "center") -> RenderedMessage:
-    grid = blank_grid(profile)
-    lines = wrap_text(text, profile.cols, profile.rows)
+    grid = _blank_grid(profile)
+    lines = _wrap_text(text, profile.cols, profile.rows)
     if valign == "center":
         top = max(0, (profile.rows - len(lines)) // 2)
     else:
         top = 0
     for i, line in enumerate(lines):
-        place_line(grid, top + i, line.rstrip(), align=align)
+        _place_line(grid, top + i, line.rstrip(), align=align)
     return RenderedMessage(profile=profile, grid=grid)
 
 
 def _kv_format_value(key: str, value: Any) -> str:
     """Format a kv value, appending % for _pct keys or $ for _curr keys when missing."""
-    s = normalize_text(format_scalar(value))
-    if key_is_pct(key) and not s.endswith("%"):
+    s = _normalize_text(_format_scalar(value))
+    if _key_is_pct(key) and not s.endswith("%"):
         return s + "%"
-    if key_is_curr(key) and not s.startswith("$"):
+    if _key_is_curr(key) and not s.startswith("$"):
         return "$" + s
     return s
 
 
 def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, columns: int = 1, separator: str | None = None) -> RenderedMessage:
     import sys
-    grid = blank_grid(profile)
-    row = place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator)
+    grid = _blank_grid(profile)
+    row = _place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator)
 
     style = data.get("_style") if isinstance(data.get("_style"), dict) else None
     # Skip internal hint keys (e.g. _style, _template).
@@ -741,7 +757,7 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
         right_items = items[1::2]
 
         def _col_widths(col_items: list) -> tuple[int, int]:
-            lw = max((len(prettify_label(k)) for k, _ in col_items), default=0)
+            lw = max((len(_prettify_label(k)) for k, _ in col_items), default=0)
             vw = max((len(_kv_format_value(k, v)) for k, v in col_items), default=0)
             return lw, vw
 
@@ -761,7 +777,7 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
             # (explicit _style or auto-detected from key name), so the tile appears
             # after the value rather than before the label.
             right_has_color = any(
-                tone_to_color(resolve_tone(data, k, v)) for k, v in right_items
+                _tone_to_color(_resolve_tone(data, k, v)) for k, v in right_items
             )
             right_reserve = 1 if right_has_color else 0
 
@@ -779,76 +795,76 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
 
                 if left_item is not None:
                     lk, lv = left_item
-                    label = ellipsize(prettify_label(lk), left_lw).ljust(left_lw)
-                    value = ellipsize(_kv_format_value(lk, lv), left_vw).rjust(left_vw)
-                    place_line(grid, row, f"{label} {value}", align="left", start_col=0)
+                    label = _ellipsize(_prettify_label(lk), left_lw).ljust(left_lw)
+                    value = _ellipsize(_kv_format_value(lk, lv), left_vw).rjust(left_vw)
+                    _place_line(grid, row, f"{label} {value}", align="left", start_col=0)
                     # Color tile for left column sits in the gap cell right after the value.
                     # gap = max(1, …) guarantees right_start > left_pw, so the tile at
                     # left_pw never overlaps the right label that starts at right_start.
-                    color = tone_to_color(resolve_tone(data, lk, lv))
+                    color = _tone_to_color(_resolve_tone(data, lk, lv))
                     if color:
-                        place_cell(grid, row, left_pw, color)
+                        _place_cell(grid, row, left_pw, color)
 
                 if right_item is not None:
                     rk, rv = right_item
-                    label = ellipsize(prettify_label(rk), right_lw).ljust(right_lw)
-                    value = ellipsize(_kv_format_value(rk, rv), right_vw).rjust(right_vw)
-                    place_line(grid, row, f"{label} {value}", align="left", start_col=right_start)
+                    label = _ellipsize(_prettify_label(rk), right_lw).ljust(right_lw)
+                    value = _ellipsize(_kv_format_value(rk, rv), right_vw).rjust(right_vw)
+                    _place_line(grid, row, f"{label} {value}", align="left", start_col=right_start)
                     # Color tile for right column goes at the board's right edge.
                     if right_reserve:
-                        color = tone_to_color(resolve_tone(data, rk, rv))
+                        color = _tone_to_color(_resolve_tone(data, rk, rv))
                         if color:
-                            place_cell(grid, row, profile.cols - 1, color)
+                            _place_cell(grid, row, profile.cols - 1, color)
 
                 row += 1
             return RenderedMessage(profile=profile, grid=grid)
 
     # columns == 1 path
     # Reserve 1 cell for a color tile only when an entry will actually produce one.
-    # Check resolve_tone unconditionally — auto-detection works without _style.
-    has_any_color = any(tone_to_color(resolve_tone(data, k, v)) for k, v in items)
+    # Check _resolve_tone unconditionally — auto-detection works without _style.
+    has_any_color = any(_tone_to_color(_resolve_tone(data, k, v)) for k, v in items)
     reserve = 1 if has_any_color and profile.cols >= 12 else 0
     items = items[: max(0, profile.rows - row)]
 
     for key, value in items:
         if row >= profile.rows:
             break
-        key_s = prettify_label(key)
+        key_s = _prettify_label(key)
         value_s = _kv_format_value(key, value)
         if profile.cols >= 18:
             left_width = min(max(len(key_s), 6), profile.cols // 2)
             right_width = profile.cols - left_width - 1 - reserve
-            left = ellipsize(key_s, left_width).ljust(left_width)
-            right = ellipsize(value_s, right_width).rjust(right_width)
-            place_line(grid, row, f"{left} {right}", align="left")
-            color = tone_to_color(resolve_tone(data, key, value))
+            left = _ellipsize(key_s, left_width).ljust(left_width)
+            right = _ellipsize(value_s, right_width).rjust(right_width)
+            _place_line(grid, row, f"{left} {right}", align="left")
+            color = _tone_to_color(_resolve_tone(data, key, value))
             if color and reserve:
-                place_cell(grid, row, profile.cols - 1, color)
+                _place_cell(grid, row, profile.cols - 1, color)
         else:
-            place_line(grid, row, ellipsize(key_s, profile.cols - 1), align="left")
+            _place_line(grid, row, _ellipsize(key_s, profile.cols - 1), align="left")
             row += 1
             if row >= profile.rows:
                 break
-            place_line(grid, row, ellipsize(value_s, profile.cols), align="right")
+            _place_line(grid, row, _ellipsize(value_s, profile.cols), align="right")
         row += 1
 
     return RenderedMessage(profile=profile, grid=grid)
 
 
-def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, align: str | None = None, separator: str | None = None) -> RenderedMessage:
+def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, align: str | None = None, separator: str | None = None) -> RenderedMessage:
     import sys
     align = align or "center"
-    grid = blank_grid(profile)
-    row_idx = place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator)
+    grid = _blank_grid(profile)
+    row_idx = _place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator)
 
     if not rows:
         if row_idx < profile.rows:
-            place_line(grid, row_idx, "NO DATA", align="center")
+            _place_line(grid, row_idx, "NO DATA", align="center")
         return RenderedMessage(profile=profile, grid=grid)
 
     # Determine color-tile reserve first (based on all columns).
     all_columns = list(rows[0].keys())
-    color_col = next((c for c in reversed(all_columns) if tone_to_color(resolve_tone({c: 0}, c, 0))), None)
+    color_col = next((c for c in reversed(all_columns) if _tone_to_color(_resolve_tone({c: 0}, c, 0))), None)
     reserve = 1 if color_col and profile.cols >= 12 else 0
     available_cols = profile.cols - reserve
 
@@ -872,19 +888,19 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
     }
 
     def fmt_header(col: str, width: int) -> str:
-        label = ellipsize(prettify_label(col), width)
+        label = _ellipsize(_prettify_label(col), width)
         return label.rjust(width) if col in numeric_cols else label.ljust(width)
 
     def fmt_cell(col: str, value: Any, width: int, formatted: str) -> str:
-        cell = ellipsize(formatted, width)
+        cell = _ellipsize(formatted, width)
         return cell.rjust(width) if isinstance(value, (int, float)) else cell.ljust(width)
 
     # Use formatted values for width inference.
     formatted_rows = [
-        {col: format_field(col, record.get(col, ""), profile)[1] for col in columns}
+        {col: _format_field(col, record.get(col, ""), profile)[1] for col in columns}
         for record in rows
     ]
-    widths = infer_widths(columns, formatted_rows, available_cols)
+    widths = _infer_widths(columns, formatted_rows, available_cols)
 
     # For left/right: distribute extra horizontal space as inter-column gaps so
     # columns span the full board width. For center: compact block, centered.
@@ -904,7 +920,7 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
 
         def place_row(row_idx: int, cells: list[str]) -> None:
             for col, start, cell in zip(columns, col_starts, cells):
-                place_line(grid, row_idx, cell, align="left", start_col=start)
+                _place_line(grid, row_idx, cell, align="left", start_col=start)
 
         if row_idx < profile.rows:
             place_row(row_idx, [fmt_header(col, widths[col]) for col in columns])
@@ -916,14 +932,14 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
             data_cells = []
             for col in columns:
                 value = record.get(col, "")
-                _, formatted, color = format_field(col, value, profile)
+                _, formatted, color = _format_field(col, value, profile)
                 if color:
                     row_color = color
                 data_cells.append(fmt_cell(col, value, widths[col], formatted))
             if row_idx < profile.rows:
                 place_row(row_idx, data_cells)
                 if row_color and reserve:
-                    place_cell(grid, row_idx, profile.cols - 1, row_color)
+                    _place_cell(grid, row_idx, profile.cols - 1, row_color)
                 row_idx += 1
     else:
         # Center (or single-column): compact block.
@@ -935,7 +951,7 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
 
         header = sep.join(fmt_header(col, widths[col]) for col in columns)
         if row_idx < profile.rows:
-            place_line(grid, row_idx, header, align=align)
+            _place_line(grid, row_idx, header, align=align)
             row_idx += 1
 
         visible_rows = rows[: max(0, profile.rows - row_idx)]
@@ -944,24 +960,24 @@ def render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str |
             row_color = None
             for col in columns:
                 value = record.get(col, "")
-                _, formatted, color = format_field(col, value, profile)
+                _, formatted, color = _format_field(col, value, profile)
                 if color:
                     row_color = color
                 cells.append(fmt_cell(col, value, widths[col], formatted))
             if row_idx < profile.rows:
-                place_line(grid, row_idx, sep.join(cells), align=align)
+                _place_line(grid, row_idx, sep.join(cells), align=align)
                 if row_color and reserve:
-                    place_cell(grid, row_idx, profile.cols - 1, row_color)
+                    _place_cell(grid, row_idx, profile.cols - 1, row_color)
                 row_idx += 1
 
     return RenderedMessage(profile=profile, grid=grid)
 
 
-def format_field(key: str, value: Any, profile: BoardProfile, style: dict | None = None) -> tuple[str, str, Color | None]:
+def _format_field(key: str, value: Any, profile: BoardProfile, style: dict | None = None) -> tuple[str, str, Color | None]:
     """Shared field formatting: returns (label, formatted_value, color).
     Applies suffix conventions (_pct, _curr), value formatting, and tone resolution."""
-    is_pct = key_is_pct(key)
-    is_curr = key_is_curr(key)
+    is_pct = _key_is_pct(key)
+    is_curr = _key_is_curr(key)
     if isinstance(value, (int, float)):
         kind = "percent" if is_pct else "currency" if is_curr else "auto"
     elif is_pct:
@@ -970,12 +986,12 @@ def format_field(key: str, value: Any, profile: BoardProfile, style: dict | None
         kind = "currency"
     else:
         kind = "auto"
-    label = prettify_label(key)
-    formatted = format_metric_value(value, kind, profile)
+    label = _prettify_label(key)
+    formatted = _format_metric_value(value, kind, profile)
     data = {key: value}
     if style:
         data["_style"] = style
-    color = tone_to_color(resolve_tone(data, key, value))
+    color = _tone_to_color(_resolve_tone(data, key, value))
     return label, formatted, color
 
 
@@ -984,26 +1000,26 @@ def render_data(profile: BoardProfile, payload: dict[str, Any] | list[dict[str, 
     a list of dicts (columnar table). Applies _pct/_curr suffix formatting and
     color indicators to all fields regardless of layout."""
     if isinstance(payload, list):
-        return render_table(profile, payload, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, align=align, separator=separator)
-    return render_metrics(profile, payload, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, valign=valign, align=align or "left", separator=separator)
+        return _render_table(profile, payload, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, align=align, separator=separator)
+    return _render_metrics(profile, payload, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, valign=valign, align=align or "left", separator=separator)
 
 
-def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, valign: str = "top", align: str = "left", separator: str | None = None) -> RenderedMessage:
+def _render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, valign: str = "top", align: str = "left", separator: str | None = None) -> RenderedMessage:
     style = data.get("_style") if isinstance(data.get("_style"), dict) else None
     entries = []
     for key, value in data.items():
         if key.startswith("_"):
             continue
-        label, formatted, color = format_field(key, value, profile, style=style)
+        label, formatted, color = _format_field(key, value, profile, style=style)
         entries.append({"key": key, "label": label, "value": formatted, "tone": color, "color": color})
 
-    title_rows = header_row_count(title, subtitle, separator)
+    title_rows = _header_row_count(title, subtitle, separator)
     n_entries = min(len(entries), profile.rows - title_rows)
     used_rows = title_rows + n_entries
     top = (profile.rows - used_rows) // 2 if valign == "center" else 0
 
-    grid = blank_grid(profile)
-    row = place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator, start_row=top)
+    grid = _blank_grid(profile)
+    row = _place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator, start_row=top)
 
     if align == "center":
         def natural_width(entry: dict) -> int:
@@ -1015,12 +1031,12 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
 
         for entry in entries[:n_entries]:
             color = entry["color"]
-            label = ellipsize(entry["label"], profile.cols)
-            value = ellipsize(entry["value"], profile.cols)
+            label = _ellipsize(entry["label"], profile.cols)
+            value = _ellipsize(entry["value"], profile.cols)
             text = f"{label} {value}"
-            place_line(grid, row, text, align="left", start_col=start_col)
+            _place_line(grid, row, text, align="left", start_col=start_col)
             if color and profile.cols >= 12:
-                place_cell(grid, row, start_col + len(text), color)
+                _place_cell(grid, row, start_col + len(text), color)
             row += 1
             if row >= profile.rows:
                 break
@@ -1033,12 +1049,12 @@ def render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | Non
             min_value_space = min(len(entry["value"]), max(4, available_width // 3))
             left_width = max(4, min(len(entry["label"]), available_width - min_value_space - 1))
             right_width = max(1, available_width - left_width - 1)
-            left = ellipsize(entry["label"], left_width).ljust(left_width)
-            right = ellipsize(entry["value"], right_width).rjust(right_width)
-            place_line(grid, row, f"{left} {right}", align="left")
+            left = _ellipsize(entry["label"], left_width).ljust(left_width)
+            right = _ellipsize(entry["value"], right_width).rjust(right_width)
+            _place_line(grid, row, f"{left} {right}", align="left")
 
             if color and profile.cols >= 12:
-                place_cell(grid, row, profile.cols - 1, color)
+                _place_cell(grid, row, profile.cols - 1, color)
             row += 1
             if row >= profile.rows:
                 break
@@ -1062,7 +1078,7 @@ def render_auto(profile: BoardProfile, payload: Any, title: str | None = None, t
 # -----------------------------------------------------------------------------
 
 
-def load_payload(path: str | None) -> Any:
+def _load_payload(path: str | None) -> Any:
     if path and path != "-":
         with open(path, "r", encoding="utf-8") as f:
             raw = f.read()
@@ -1127,7 +1143,7 @@ def read_cloud(token: str, profile: BoardProfile | None = None, timeout: int = 1
     data = r.json()
     # layout is a JSON-encoded string (not a parsed array), so double-parse.
     chars = json.loads(data["currentMessage"]["layout"])
-    return from_characters(chars, profile or _detect_profile(chars))
+    return _from_characters(chars, profile or _detect_profile(chars))
 
 
 def _raise_for_status(r: Any) -> None:
@@ -1201,7 +1217,7 @@ def post_local(
 # -----------------------------------------------------------------------------
 
 
-def compact_time(dt: datetime) -> str:
+def _compact_time(dt: datetime) -> str:
     """Format a datetime as a short 12h time string: 10:01A, 9:30P.
     NOTE: 24h locale support is not yet handled — always uses 12h with A/P suffix."""
     suffix = "A" if dt.hour < 12 else "P"
@@ -1209,7 +1225,7 @@ def compact_time(dt: datetime) -> str:
     return f"{hour}:{dt.minute:02d}{suffix}"
 
 
-def place_timestamp(message: RenderedMessage, tz: str | None = None, force: bool = False) -> RenderedMessage:
+def _place_timestamp(message: RenderedMessage, tz: str | None = None, force: bool = False) -> RenderedMessage:
     """Place the current time in the bottom-right of the grid if there is room.
     Requires the timestamp width plus a 2-cell buffer to be blank at the right
     of the last row. Silently skipped if there isn't room, unless force=True.
@@ -1220,12 +1236,12 @@ def place_timestamp(message: RenderedMessage, tz: str | None = None, force: bool
     else:
         now = datetime.now()
 
-    ts = compact_time(now)
+    ts = _compact_time(now)
     last_row = message.grid[-1]
     buffer = 2
     has_room = all(cell == " " for cell in last_row[-(len(ts) + buffer):])
     if has_room or force:
-        place_line(message.grid, message.profile.rows - 1, ts, align="right")
+        _place_line(message.grid, message.profile.rows - 1, ts, align="right")
     return message
 
 
@@ -1237,11 +1253,11 @@ def place_timestamp(message: RenderedMessage, tz: str | None = None, force: bool
 
 def _ansi_block(color: Color, ansi: bool) -> str:
     if ansi and color in COLOR_TO_ANSI:
-        return f"{COLOR_TO_ANSI[color]}██{ANSI_RESET}"
+        return f"{COLOR_TO_ANSI[color]}██{_ANSI_RESET}"
     return "██"
 
 
-def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: bool = True) -> str:
+def _explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: bool = True) -> str:
     """Return a human-readable breakdown of color indicators and numeric formatting
     for a metrics payload. Returns an empty string if nothing to explain."""
     style = data.get("_style") if isinstance(data.get("_style"), dict) else {}
@@ -1252,8 +1268,8 @@ def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: boo
         if key.startswith("_"):
             continue
 
-        is_pct = key_is_pct(key)
-        is_curr = key_is_curr(key)
+        is_pct = _key_is_pct(key)
+        is_curr = _key_is_curr(key)
         if isinstance(value, (int, float)):
             kind = "percent" if is_pct else "currency" if is_curr else "auto"
         elif is_pct:
@@ -1263,12 +1279,12 @@ def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: boo
         else:
             kind = None
 
-        label = prettify_label(key)
-        fmt_value = format_metric_value(value, kind or "auto", profile)
+        label = _prettify_label(key)
+        fmt_value = _format_metric_value(value, kind or "auto", profile)
 
         # Color indicators section
-        tone = resolve_tone(data, key, value)
-        color = tone_to_color(tone)
+        tone = _resolve_tone(data, key, value)
+        color = _tone_to_color(tone)
         if color is not None:
             block = _ansi_block(color, ansi_color)
             override = style.get(key)
@@ -1313,7 +1329,7 @@ def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: boo
         if kind is None:
             continue
 
-        raw_label = normalize_text(key).replace("_", " ").strip()
+        raw_label = _normalize_text(key).replace("_", " ").strip()
         label_changed = raw_label != label
 
         raw_str = str(int(value)) if isinstance(value, float) and value.is_integer() else str(value)
@@ -1354,7 +1370,7 @@ def explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: boo
 # -----------------------------------------------------------------------------
 
 
-def build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top", align: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, tz: str | None = None, columns: int = 1, separator: str | None = None) -> RenderedMessage:
+def _build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top", align: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, tz: str | None = None, columns: int = 1, separator: str | None = None) -> RenderedMessage:
     # A newline in the title splits it: first line → title, second line → subtitle
     # (only when no explicit subtitle was provided).
     if title and "\n" in title:
@@ -1372,7 +1388,7 @@ def build_message(profile: BoardProfile, template: str, payload: Any, title: str
                 now = datetime.now(ZoneInfo(tz))
             else:
                 now = datetime.now()
-            resolved_subtitle = compact_time(now)
+            resolved_subtitle = _compact_time(now)
         else:
             resolved_subtitle = subtitle
 
@@ -1382,8 +1398,8 @@ def build_message(profile: BoardProfile, template: str, payload: Any, title: str
         import sys
         print(f"warning: --columns {columns} has no effect on template '{template}'", file=sys.stderr)
 
-    if is_raw_grid(payload, profile):
-        return from_characters(payload, profile)
+    if _is_raw_grid(payload, profile):
+        return _from_characters(payload, profile)
     if template == "text":
         return render_text(profile, str(payload), valign=valign)
     if template == "kv":
@@ -1468,33 +1484,33 @@ def cli(argv: list[str] | None = None) -> int:
         return 0
 
     profile = PROFILES[args.profile]
-    payload = load_payload(args.input)
+    payload = _load_payload(args.input)
     if not args.title or args.title_color.lower() == "none":
         title_color: Color | list[Color] | None = None
     else:
         _tc_parts = [p.strip() for p in args.title_color.split(",")]
         if len(_tc_parts) == 1:
-            title_color = tone_to_color(_tc_parts[0])
+            title_color = _tone_to_color(_tc_parts[0])
             if title_color is None:
                 print(f"warning: unknown color '{_tc_parts[0]}' for --title-color, using white", file=sys.stderr)
                 title_color = Color.WHITE
         else:
             title_color = []
             for _p in _tc_parts[:3]:
-                _c = tone_to_color(_p)
+                _c = _tone_to_color(_p)
                 if _c is None:
                     print(f"warning: unknown color '{_p}' for --title-color, using white", file=sys.stderr)
                     _c = Color.WHITE
                 title_color.append(_c)
     _sc_raw = getattr(args, "subtitle_color", None)
-    if _sc_raw and _sc_raw.lower() != "none" and tone_to_color(_sc_raw) is None:
+    if _sc_raw and _sc_raw.lower() != "none" and _tone_to_color(_sc_raw) is None:
         print(f"warning: unknown color '{_sc_raw}' for --subtitle-color, ignoring", file=sys.stderr)
         _sc_raw = None
-    subtitle_color: Color | list[Color] | None = tone_to_color(_sc_raw) if _sc_raw else None
-    message = build_message(profile, args.template, payload, args.title, valign=args.valign, align=args.align, title_color=title_color, subtitle=getattr(args, "subtitle", None), subtitle_color=subtitle_color, tz=args.tz, columns=args.columns, separator=getattr(args, "separator", None))
+    subtitle_color: Color | list[Color] | None = _tone_to_color(_sc_raw) if _sc_raw else None
+    message = _build_message(profile, args.template, payload, args.title, valign=args.valign, align=args.align, title_color=title_color, subtitle=getattr(args, "subtitle", None), subtitle_color=subtitle_color, tz=args.tz, columns=args.columns, separator=getattr(args, "separator", None))
 
     if getattr(args, "force_timestamp", False) or getattr(args, "timestamp", False):
-        message = place_timestamp(message, tz=args.tz, force=getattr(args, "force_timestamp", False))
+        message = _place_timestamp(message, tz=args.tz, force=getattr(args, "force_timestamp", False))
 
     show_preview = not args.no_preview
     if args.command == "render" and args.json_only:
@@ -1512,7 +1528,7 @@ def cli(argv: list[str] | None = None) -> int:
         if args.preview_only and args.json_only:
             raise SystemExit("choose only one of --preview-only or --json-only")
         if getattr(args, "explain", False) and isinstance(payload, dict):
-            explanation = explain_metrics(payload, profile, ansi_color=not args.no_ansi)
+            explanation = _explain_metrics(payload, profile, ansi_color=not args.no_ansi)
             if explanation:
                 print(explanation)
                 print()
