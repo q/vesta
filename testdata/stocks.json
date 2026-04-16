@@ -1,6 +1,6 @@
 [
-  {"ticker": "AAPL", "price_curr": 213.45, "change_pct": 1.23},
-  {"ticker": "NVDA", "price_curr": 875.20, "change_pct": -2.14},
-  {"ticker": "MSFT", "price_curr": 415.80, "change_pct": 0.87},
-  {"ticker": "TSLA", "price_curr": 248.50, "change_pct": -0.45}
+  {"ticker": "AAPL", "price_curr": 262.45, "change_pct": 1.23},
+  {"ticker": "NVDA", "price_curr": 185.20, "change_pct": -2.14},
+  {"ticker": "MSFT", "price_curr": 415.80, "change_pct": 1.87},
+  {"ticker": "TSLA", "price_curr": 378.50, "change_pct": -3.45}
 ]
