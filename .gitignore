@@ -13,3 +13,6 @@ wheels/
 .claude/
 
 makefile
+
+# Local scratch files
+data*.json
