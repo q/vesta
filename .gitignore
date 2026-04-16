@@ -16,3 +16,4 @@ makefile
 
 # Local scratch files
 data*.json
+docs/
