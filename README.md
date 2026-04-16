@@ -395,14 +395,6 @@ cat data.json | vesta render --json-only > saved.json
 cat saved.json | vesta render --preview-only
 ```
 
-## Running the examples
-
-```bash
-./run_examples.sh
-```
-
-Runs all bundled examples against local test data. Requires no API credentials.
-
 ## Installation
 
 ```bash
