@@ -1,6 +1,6 @@
 [project]
 name = "vestaboard-tools"
-version = "0.4.3"
+version = "0.4.4"
 description = "Formatter, previewer, and publisher for Vestaboard devices"
 readme = "README.md"
 requires-python = ">=3.11"

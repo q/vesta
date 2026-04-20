@@ -4,7 +4,7 @@ try:
     from importlib.metadata import version
     __version__ = version("vestaboard-tools")
 except Exception:
-    __version__ = "0.4.3"  # fallback when running from source uninstalled
+    __version__ = "0.4.4"  # fallback when running from source uninstalled
 
 __all__ = [
     "BoardProfile",
@@ -937,6 +937,13 @@ def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str 
     ]
     widths = _infer_widths(columns, formatted_rows, available_cols)
 
+    # Auto-switch to left spread when content is too tight to center with gaps.
+    if align not in ("left", "right") and len(columns) > 1:
+        n_gaps = len(columns) - 1
+        content_width = sum(widths[col] for col in columns)
+        if content_width + n_gaps >= available_cols:
+            align = "left"
+
     # For left/right: distribute extra horizontal space as inter-column gaps so
     # columns span the full board width. For center: compact block, centered.
     if align in ("left", "right") and len(columns) > 1:
@@ -1057,21 +1064,21 @@ def _render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | No
     row = _place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator, start_row=top)
 
     if align == "center":
-        def natural_width(entry: dict) -> int:
-            has_color = entry["color"] is not None and profile.cols >= 12
-            return len(entry["label"]) + 1 + len(entry["value"]) + (1 if has_color else 0)
+        visible = entries[:n_entries]
+        has_any_color = any(e["color"] is not None for e in visible) and profile.cols >= 12
+        tile_reserve = 1 if has_any_color else 0
+        max_label = max((len(e["label"]) for e in visible), default=0)
+        max_value = max((len(e["value"]) for e in visible), default=0)
+        block = min(max_label + max_value + tile_reserve, profile.cols)
+        start_col = max(0, (profile.cols - block + 1) // 2)
 
-        max_width = min(max((natural_width(e) for e in entries[:n_entries]), default=0), profile.cols)
-        start_col = max(0, (profile.cols - max_width) // 2)
-
-        for entry in entries[:n_entries]:
+        for entry in visible:
             color = entry["color"]
-            label = _ellipsize(entry["label"], profile.cols)
-            value = _ellipsize(entry["value"], profile.cols)
-            text = f"{label} {value}"
-            _place_line(grid, row, text, align="left", start_col=start_col)
+            left = _ellipsize(entry["label"], max_label).ljust(max_label)
+            right = _ellipsize(entry["value"], max_value).rjust(max_value)
+            _place_line(grid, row, f"{left}{right}", align="left", start_col=start_col)
             if color and profile.cols >= 12:
-                _place_cell(grid, row, start_col + len(text), color)
+                _place_cell(grid, row, start_col + max_label + max_value, color)
             row += 1
             if row >= profile.rows:
                 break

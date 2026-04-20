@@ -580,7 +580,7 @@ wheels = [
 
 [[package]]
 name = "vestaboard-tools"
-version = "0.4.0"
+version = "0.4.4"
 source = { editable = "." }
 dependencies = [
     { name = "requests" },

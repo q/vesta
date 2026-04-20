@@ -579,6 +579,50 @@ class TestAlign(unittest.TestCase):
         )
         self.assertEqual(left_chars, center_chars)
 
+    def test_center_values_right_aligned_within_block(self):
+        # Values should right-justify within their column — short values get leading spaces,
+        # longer values push up against the label without excess gap.
+        data = {"a": 1, "longer_label": 999}
+        msg = _render_metrics(FLAGSHIP, data, align="center")
+        content_rows = [row for row in msg.grid if any(c != " " for c in row)]
+        # Find start_col for the block (first non-space in first content row)
+        start_col = next(i for i, c in enumerate(content_rows[0]) if c != " ")
+        # Both rows start at the same column
+        for row in content_rows:
+            row_start = next((i for i, c in enumerate(row) if c != " "), None)
+            self.assertEqual(row_start, start_col)
+
+    def test_center_label_column_fixed_width(self):
+        # All labels are padded to the same width (widest label sets the column).
+        data = {"a": 1, "longerlabel": 999}
+        msg = _render_metrics(FLAGSHIP, data, align="center")
+        content_rows = [row for row in msg.grid if any(c != " " for c in row)]
+        start_col = next(i for i, c in enumerate(content_rows[0]) if c != " ")
+        max_label_len = max(len(_prettify_label(k)) for k in data)
+        # The character at start_col + max_label_len should be the start of the value
+        # column — i.e., not a space for the row with the longest value
+        rows_by_label = sorted(content_rows, key=lambda r: "".join(c for c in r if isinstance(c, str)))
+        for row in content_rows:
+            label_end = start_col + max_label_len
+            # Characters from start_col to label_end - 1 form the (padded) label cell
+            label_chars = "".join(c for c in row[start_col:label_end] if isinstance(c, str))
+            self.assertEqual(len(label_chars), max_label_len)
+
+    def test_center_tile_at_consistent_column(self):
+        # Color tiles must all land in the same column across rows.
+        data = {
+            "bounce_change": 3.0,
+            "revenue_change": -1.5,
+            "sessions_change": 0.7,
+        }
+        msg = _render_metrics(FLAGSHIP, data, align="center")
+        tile_cols = [
+            i for row in msg.grid
+            for i, cell in enumerate(row) if isinstance(cell, Color)
+        ]
+        self.assertTrue(len(tile_cols) > 1)
+        self.assertEqual(len(set(tile_cols)), 1)
+
 
 class TestTimestamp(unittest.TestCase):
     def test_timestamp_placed_when_last_row_empty(self):
@@ -955,6 +999,25 @@ class TestRenderTable(unittest.TestCase):
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         # header row should be present
         self.assertIn("NAME", all_chars)
+
+    def test_tight_table_auto_spreads_left(self):
+        # Stocks-like data: 3 columns that fill available width should spread edge-to-edge
+        # rather than centering, ensuring formatted values (e.g. %) aren't clipped.
+        rows = [
+            {"ticker": "AAPL", "price_curr": 262.45, "change_pct": 1.23},
+            {"ticker": "NVDA", "price_curr": 185.20, "change_pct": -2.14},
+        ]
+        msg = _render_table(FLAGSHIP, rows)
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("%", all_chars)
+
+    def test_tight_table_values_not_clipped(self):
+        # Negative pct values are longer; ensure the minus sign survives
+        rows = [{"ticker": "TSLA", "price_curr": 378.50, "change_pct": -3.45}]
+        msg = _render_table(FLAGSHIP, rows)
+        all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
+        self.assertIn("-", all_chars)
+        self.assertIn("%", all_chars)
 
 
 class TestRenderData(unittest.TestCase):

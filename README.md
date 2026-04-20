@@ -226,9 +226,9 @@ Falls back to `--columns 1` with a warning if the content is too wide for the pr
 
 **`--align [left|center|right]`**
 
-For **metrics** (JSON object): aligns the content block horizontally as a unit. Default is `left`.
+For **metrics** (JSON object): controls horizontal placement. Default is `left`. Use `center` for a tight two-column block (labels left-aligned, values right-aligned, the whole block centered on the board). Color indicator tiles, when present, are placed immediately after the value column with no gap.
 
-For **tables** (JSON array or CSV): default is `center` (compact block, centered). `left` and `right` spread columns edge-to-edge with equal inter-column gaps — first column anchored to the chosen edge, last column anchored to the opposite edge.
+For **tables** (JSON array or CSV): default is `center` (compact block, centered). When columns are too wide to center comfortably, the layout automatically spreads left-to-right to avoid clipping. `left` and `right` spread columns edge-to-edge with equal inter-column gaps — first column anchored to the chosen edge, last column anchored to the opposite edge.
 
 **`--valign [top|center]`**
 
@@ -338,10 +338,10 @@ echo '{
 ```
 ┌────────────── flagship 6x22 ───────────────┐
 │                                            │
-│    R E V E N U E   $ 1 8 4 . 2 K ██        │
-│    S E S S I O N S   1 0 . 8 K             │
-│    C O N V E R S I O N   1 3 . 2 % ██      │
-│    B O U N C E   R A T E   4 8 . 4 % ██    │
+│    R E V E N U E         $ 1 8 4 . 2 K ██  │
+│    S E S S I O N S           1 0 . 8 K     │
+│    C O N V E R S I O N       1 3 . 2 % ██  │
+│    B O U N C E   R A T E     4 8 . 4 % ██  │
 │                                  9 : 3 4 P │
 └────────────────────────────────────────────┘
 ```
