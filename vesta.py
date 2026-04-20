@@ -4,7 +4,7 @@ try:
     from importlib.metadata import version
     __version__ = version("vestaboard-tools")
 except Exception:
-    __version__ = "0.4.5"  # fallback when running from source uninstalled
+    __version__ = "0.5.0"  # fallback when running from source uninstalled
 
 __all__ = [
     "BoardProfile",
@@ -1109,11 +1109,12 @@ def _render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | No
             if row >= profile.rows:
                 break
     else:
+        has_any_color = any(e["color"] is not None for e in entries[:n_entries])
+        reserve_cols = 1 if has_any_color and profile.cols >= 12 else 0
+        available_width = profile.cols - reserve_cols
         for entry in entries[:n_entries]:
             color = entry["color"]
 
-            reserve_cols = 1 if color and profile.cols >= 12 else 0
-            available_width = profile.cols - reserve_cols
             min_value_space = min(len(entry["value"]), max(4, available_width // 3))
             left_width = max(4, min(len(entry["label"]), available_width - min_value_space - 1))
             right_width = max(1, available_width - left_width - 1)
