@@ -408,7 +408,11 @@ def _place_header(
             _place_line(grid, row, title, align="center")
         row += 1
     if subtitle and title and row < profile.rows:
-        _place_subtitle_row(grid, row, subtitle, _lead_color(subtitle_color or title_color))
+        effective_sub_color = subtitle_color or title_color
+        if effective_sub_color is not None:
+            _place_subtitle_row(grid, row, subtitle, _lead_color(effective_sub_color))
+        else:
+            _place_line(grid, row, subtitle, align="center")
         row += 1
     if separator and row < profile.rows:
         _place_separator(grid, row, separator)
