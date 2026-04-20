@@ -354,8 +354,8 @@ vesta render --input testdata/metrics_note.json --profile note --preview-only
 
 ```
 ┌───────── note 3x15 ──────────┐
-│T E M P                   7 2 │
-│H U M I D I T Y         5 4 % │
+│T E M P                 7 2   │
+│H U M I D I T Y       5 4 %   │
 │C H A N G E       - 2 . 1 % ██│
 └──────────────────────────────┘
 ```
