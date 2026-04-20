@@ -375,7 +375,32 @@ Color names match the Vestaboard tile set: `red`, `orange`, `yellow`, `green`, `
 
 ```bash
 echo "STATUS {green} ALL GOOD" | vesta render --preview-only
+```
+
+```
+┌────────────── flagship 6x22 ───────────────┐
+│    S T A T U S   ██  A L L   G O O D       │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+└────────────────────────────────────────────┘
+```
+
+```bash
 echo "ALERT {red} CHECK ENGINE" | vesta render --preview-only
+```
+
+```
+┌────────────── flagship 6x22 ───────────────┐
+│  A L E R T   ██  C H E C K   E N G I N E   │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+└────────────────────────────────────────────┘
 ```
 
 **Get raw character codes** (for direct API use):
