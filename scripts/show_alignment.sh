@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 R="uv run vesta.py render --preview-only"
 
