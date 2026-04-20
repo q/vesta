@@ -4,7 +4,7 @@ try:
     from importlib.metadata import version
     __version__ = version("vestaboard-tools")
 except Exception:
-    __version__ = "0.4.1"  # fallback when running from source uninstalled
+    __version__ = "0.4.2"  # fallback when running from source uninstalled
 
 __all__ = [
     "BoardProfile",
@@ -220,7 +220,22 @@ def _blank_grid(profile: BoardProfile, fill: str = " ") -> _Grid:
 
 
 def _normalize_text(text: str) -> str:
-    return text.upper().replace("\t", " ")
+    return text.upper().replace("\t", " ").replace("{", "(").replace("}", ")")
+
+
+_ESCAPE_COLOR_NAMES: dict[str, int] = {m.name.lower(): m.value for m in Color}
+_ESCAPE_COLOR_NAMES["purple"] = Color.VIOLET.value
+
+
+def _expand_escapes(text: str) -> str:
+    def _replace(m: re.Match) -> str:
+        token = m.group(1).lower()
+        if token in _ESCAPE_COLOR_NAMES:
+            return chr(0xE000 + _ESCAPE_COLOR_NAMES[token])
+        if token.isdigit() and 0 <= int(token) <= 71:
+            return chr(0xE000 + int(token))
+        return m.group(0)
+    return re.sub(r"\{(\w+)\}", _replace, text)
 
 
 def _ellipsize(text: str, width: int) -> str:
@@ -273,7 +288,11 @@ def _place_line(grid: _Grid, row_idx: int, text: str, align: str = "left", start
     else:
         start = start_col
     for i, ch in enumerate(text[:available_width]):
-        grid[row_idx][start + i] = ch
+        if ch and 0xE000 <= ord(ch) <= 0xE047:
+            code = ord(ch) - 0xE000
+            grid[row_idx][start + i] = Color(code) if code >= Color.RED else ch
+        else:
+            grid[row_idx][start + i] = ch
 
 
 def _place_cell(grid: _Grid, row_idx: int, col_idx: int, value: _Cell) -> None:
@@ -426,6 +445,8 @@ def _is_raw_grid(payload: Any, profile: BoardProfile) -> bool:
 def _encode_cell(cell: _Cell, profile: BoardProfile) -> int:
     if isinstance(cell, Color):
         return int(cell)
+    if cell and 0xE000 <= ord(cell[0]) <= 0xE047:
+        return ord(cell[0]) - 0xE000
 
     ch = _normalize_text(cell[:1] if cell else " ")
     # Code 62 hardware quirk: normalize regardless of which symbol the caller used.
@@ -718,6 +739,7 @@ def _tone_to_color(tone: str | None) -> Color | None:
 
 
 def render_text(profile: BoardProfile, text: str, align: str = "center", valign: str = "center") -> RenderedMessage:
+    text = _expand_escapes(text)
     grid = _blank_grid(profile)
     lines = _wrap_text(text, profile.cols, profile.rows)
     if valign == "center":

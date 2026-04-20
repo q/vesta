@@ -14,9 +14,11 @@ from vesta import (
     _compact_datetime,
     _ellipsize,
     _encode_cell,
+    _expand_escapes,
     _explain_metrics,
     _format_metric_value,
     _load_payload,
+    _normalize_text,
     _place_timestamp,
     _prettify_label,
     render_kv,
@@ -1451,6 +1453,102 @@ class TestCliExplain(unittest.TestCase):
         row0 = grid[0]
         self.assertFalse(any(cell in color_codes for cell in row0),
                          "row 0 should have no color tiles with --title-color none")
+
+
+class TestNormalizeTextSubstitutions(unittest.TestCase):
+    def test_open_brace_becomes_paren(self):
+        self.assertEqual(_normalize_text("{"), "(")
+
+    def test_close_brace_becomes_paren(self):
+        self.assertEqual(_normalize_text("}"), ")")
+
+    def test_braces_in_context(self):
+        self.assertEqual(_normalize_text("{FOO}"), "(FOO)")
+
+
+class TestExpandEscapes(unittest.TestCase):
+    def test_color_name_red(self):
+        result = _expand_escapes("{red}")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(ord(result), 0xE000 + Color.RED.value)
+
+    def test_color_name_case_insensitive(self):
+        self.assertEqual(_expand_escapes("{RED}"), _expand_escapes("{red}"))
+        self.assertEqual(_expand_escapes("{Green}"), _expand_escapes("{green}"))
+
+    def test_all_color_names_expand(self):
+        for color in Color:
+            result = _expand_escapes("{" + color.name.lower() + "}")
+            self.assertEqual(len(result), 1)
+            self.assertEqual(ord(result), 0xE000 + color.value)
+
+    def test_purple_alias_maps_to_violet(self):
+        self.assertEqual(_expand_escapes("{purple}"), _expand_escapes("{violet}"))
+
+    def test_numeric_code_color(self):
+        result = _expand_escapes("{63}")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(ord(result), 0xE000 + 63)
+
+    def test_numeric_code_zero(self):
+        result = _expand_escapes("{0}")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(ord(result), 0xE000)
+
+    def test_numeric_code_max(self):
+        result = _expand_escapes("{71}")
+        self.assertEqual(len(result), 1)
+        self.assertEqual(ord(result), 0xE000 + 71)
+
+    def test_numeric_code_out_of_range_left_as_is(self):
+        self.assertEqual(_expand_escapes("{72}"), "{72}")
+
+    def test_invalid_name_left_as_is(self):
+        self.assertEqual(_expand_escapes("{notacolor}"), "{notacolor}")
+
+    def test_non_escape_text_unchanged(self):
+        self.assertEqual(_expand_escapes("HELLO WORLD"), "HELLO WORLD")
+
+    def test_escape_mid_string(self):
+        result = _expand_escapes("A{red}B")
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0], "A")
+        self.assertEqual(ord(result[1]), 0xE000 + Color.RED.value)
+        self.assertEqual(result[2], "B")
+
+
+class TestEscapePlaceholderEncoding(unittest.TestCase):
+    def test_placeholder_decodes_to_color_code(self):
+        placeholder = chr(0xE000 + Color.GREEN.value)
+        self.assertEqual(_encode_cell(placeholder, FLAGSHIP), Color.GREEN.value)
+
+    def test_placeholder_code_zero(self):
+        placeholder = chr(0xE000)
+        self.assertEqual(_encode_cell(placeholder, FLAGSHIP), 0)
+
+    def test_placeholder_code_71(self):
+        placeholder = chr(0xE000 + 71)
+        self.assertEqual(_encode_cell(placeholder, FLAGSHIP), 71)
+
+
+class TestRenderTextEscapes(unittest.TestCase):
+    def test_color_tile_placed_in_grid(self):
+        msg = render_text(FLAGSHIP, "{red}")
+        codes = msg.to_characters()
+        flat = [c for row in codes for c in row]
+        self.assertIn(Color.RED.value, flat)
+
+    def test_invalid_escape_renders_as_parens(self):
+        msg = render_text(FLAGSHIP, "{x}")
+        codes = msg.to_characters()
+        flat = [c for row in codes for c in row]
+        self.assertIn(41, flat)  # (
+        self.assertIn(42, flat)  # )
+
+    def test_numeric_escape_red(self):
+        msg_name = render_text(FLAGSHIP, "{red}")
+        msg_code = render_text(FLAGSHIP, "{63}")
+        self.assertEqual(msg_name.to_characters(), msg_code.to_characters())
 
 
 if __name__ == "__main__":
