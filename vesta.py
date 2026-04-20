@@ -4,7 +4,7 @@ try:
     from importlib.metadata import version
     __version__ = version("vestaboard-tools")
 except Exception:
-    __version__ = "0.4.4"  # fallback when running from source uninstalled
+    __version__ = "0.4.5"  # fallback when running from source uninstalled
 
 __all__ = [
     "BoardProfile",
@@ -774,20 +774,20 @@ def _kv_format_value(key: str, value: Any) -> str:
     return s
 
 
-def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, columns: int = 1, separator: str | None = None) -> RenderedMessage:
+def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, columns: int = 1, align: str = "left", valign: str = "top", separator: str | None = None) -> RenderedMessage:
     import sys
     grid = _blank_grid(profile)
-    row = _place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator)
+    header_row = _place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator)
 
     style = data.get("_style") if isinstance(data.get("_style"), dict) else None
     # Skip internal hint keys (e.g. _style, _template).
     items = [(k, v) for k, v in data.items() if not k.startswith("_")]
+    available_rows = max(0, profile.rows - header_row)
 
     if columns == 2:
         from itertools import zip_longest
 
-        max_rows = max(0, profile.rows - row)
-        items = items[: max_rows * 2]
+        items = items[: available_rows * 2]
         left_items = items[::2]
         right_items = items[1::2]
 
@@ -816,14 +816,33 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
             )
             right_reserve = 1 if right_has_color else 0
 
-            # Trim right value width if needed to keep at least a 1-col gap.
-            if left_pw + right_pw + right_reserve >= profile.cols:
-                right_vw = max(0, profile.cols - left_pw - right_lw - 2 - right_reserve)
-                right_pw = right_lw + 1 + right_vw if right_items else 0
-            gap = max(1, profile.cols - left_pw - right_pw - right_reserve)
-            right_start = left_pw + gap
+            if align == "center":
+                # Prefer gap=2; degrade to gap=1 when the block is too wide.
+                # If even gap=1 requires trimming, trim right_vw to fit.
+                gap = 2
+                if left_pw + gap + right_pw + right_reserve > profile.cols:
+                    gap = 1
+                if left_pw + gap + right_pw + right_reserve > profile.cols:
+                    right_vw = max(0, profile.cols - left_pw - right_lw - 1 - gap - right_reserve)
+                    right_pw = right_lw + 1 + right_vw if right_items else 0
+                block_width = left_pw + gap + right_pw + right_reserve
+                start_col = max(0, (profile.cols - block_width) // 2)
+                tile_right_col = start_col + left_pw + gap + right_pw
+            else:
+                # Left-aligned: spread gap to fill the full board width.
+                if left_pw + right_pw + right_reserve >= profile.cols:
+                    right_vw = max(0, profile.cols - left_pw - right_lw - 2 - right_reserve)
+                    right_pw = right_lw + 1 + right_vw if right_items else 0
+                gap = max(1, profile.cols - left_pw - right_pw - right_reserve)
+                start_col = 0
+                tile_right_col = profile.cols - 1
+
+            right_start = start_col + left_pw + gap
 
             pairs = list(zip_longest(left_items, right_items))
+            n_content_rows = min(len(pairs), available_rows)
+            row = header_row + (max(0, (available_rows - n_content_rows) // 2) if valign == "center" else 0)
+
             for left_item, right_item in pairs:
                 if row >= profile.rows:
                     break
@@ -832,24 +851,21 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
                     lk, lv = left_item
                     label = _ellipsize(_prettify_label(lk), left_lw).ljust(left_lw)
                     value = _ellipsize(_kv_format_value(lk, lv), left_vw).rjust(left_vw)
-                    _place_line(grid, row, f"{label} {value}", align="left", start_col=0)
+                    _place_line(grid, row, f"{label} {value}", align="left", start_col=start_col)
                     # Color tile for left column sits in the gap cell right after the value.
-                    # gap = max(1, …) guarantees right_start > left_pw, so the tile at
-                    # left_pw never overlaps the right label that starts at right_start.
                     color = _tone_to_color(_resolve_tone(data, lk, lv))
                     if color:
-                        _place_cell(grid, row, left_pw, color)
+                        _place_cell(grid, row, start_col + left_pw, color)
 
                 if right_item is not None:
                     rk, rv = right_item
                     label = _ellipsize(_prettify_label(rk), right_lw).ljust(right_lw)
                     value = _ellipsize(_kv_format_value(rk, rv), right_vw).rjust(right_vw)
                     _place_line(grid, row, f"{label} {value}", align="left", start_col=right_start)
-                    # Color tile for right column goes at the board's right edge.
                     if right_reserve:
                         color = _tone_to_color(_resolve_tone(data, rk, rv))
                         if color:
-                            _place_cell(grid, row, profile.cols - 1, color)
+                            _place_cell(grid, row, tile_right_col, color)
 
                 row += 1
             return RenderedMessage(profile=profile, grid=grid)
@@ -859,7 +875,11 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
     # Check _resolve_tone unconditionally — auto-detection works without _style.
     has_any_color = any(_tone_to_color(_resolve_tone(data, k, v)) for k, v in items)
     reserve = 1 if has_any_color and profile.cols >= 12 else 0
-    items = items[: max(0, profile.rows - row)]
+    items = items[: available_rows]
+
+    rows_per_item = 1 if profile.cols >= 18 else 2
+    n_content_rows = min(len(items) * rows_per_item, available_rows)
+    row = header_row + (max(0, (available_rows - n_content_rows) // 2) if valign == "center" else 0)
 
     for key, value in items:
         if row >= profile.rows:
@@ -1449,7 +1469,7 @@ def _build_message(profile: BoardProfile, template: str, payload: Any, title: st
     if template == "kv":
         if not isinstance(payload, dict):
             raise SystemExit("template=kv requires a JSON object")
-        return render_kv(profile, payload, title=title, title_color=title_color, subtitle=resolved_subtitle, subtitle_color=subtitle_color, columns=columns, separator=separator)
+        return render_kv(profile, payload, title=title, title_color=title_color, subtitle=resolved_subtitle, subtitle_color=subtitle_color, columns=columns, align=align or "left", valign=valign, separator=separator)
     if template in ("data", "table", "metrics"):  # table/metrics kept as aliases
         if not isinstance(payload, (dict, list)):
             raise SystemExit("template=data requires a JSON object or array of objects")
