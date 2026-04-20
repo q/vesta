@@ -4,7 +4,7 @@ try:
     from importlib.metadata import version
     __version__ = version("vestaboard-tools")
 except Exception:
-    __version__ = "0.4.0"  # fallback when running from source uninstalled
+    __version__ = "0.4.1"  # fallback when running from source uninstalled
 
 __all__ = [
     "BoardProfile",
@@ -1159,8 +1159,10 @@ def _raise_for_status(r: Any) -> None:
     raise SystemExit(f"error: API request failed ({r.status_code}): {r.text.strip()}")
 
 
-def post_cloud(token: str, message: RenderedMessage, timeout: int = 10) -> dict[str, Any]:
-    payload = {"characters": message.to_characters()}
+def post_cloud(token: str, message: RenderedMessage, forced: bool = False, timeout: int = 10) -> dict[str, Any]:
+    payload: dict[str, Any] = {"characters": message.to_characters()}
+    if forced:
+        payload["forced"] = True
     r = requests.post(
         "https://cloud.vestaboard.com/",
         headers={
@@ -1449,6 +1451,7 @@ def cli(argv: list[str] | None = None) -> int:
     cloud_p = sub.add_parser("post-cloud", help="Render and send via Cloud API")
     add_common(cloud_p)
     cloud_p.add_argument("--token", default=os.getenv("VESTABOARD_TOKEN"))
+    cloud_p.add_argument("--forced", action="store_true", help="Send even during quiet hours")
 
     local_p = sub.add_parser("post-local", help="Render and send via Local API")
     add_common(local_p)
@@ -1540,7 +1543,7 @@ def cli(argv: list[str] | None = None) -> int:
     if args.command == "post-cloud":
         if not args.token:
             raise SystemExit("missing --token or VESTABOARD_TOKEN")
-        result = post_cloud(args.token, message)
+        result = post_cloud(args.token, message, forced=args.forced)
         print(json.dumps(result, indent=2))
         return 0
 
