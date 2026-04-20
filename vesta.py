@@ -4,7 +4,7 @@ try:
     from importlib.metadata import version
     __version__ = version("vestaboard-tools")
 except Exception:
-    __version__ = "0.4.2"  # fallback when running from source uninstalled
+    __version__ = "0.4.3"  # fallback when running from source uninstalled
 
 __all__ = [
     "BoardProfile",
@@ -246,34 +246,47 @@ def _ellipsize(text: str, width: int) -> str:
 
 
 def _wrap_text(text: str, width: int, max_lines: int) -> list[str]:
-    words = _normalize_text(text).split()
-    if not words:
+    normalized = _normalize_text(text)
+    if not normalized.strip():
         return [""]
-    lines: list[str] = []
-    current = ""
-    for word in words:
-        candidate = word if not current else f"{current} {word}"
-        if len(candidate) <= width:
-            current = candidate
-        else:
-            if current:
-                lines.append(current)
-            if len(word) > width:
-                lines.append(word[:width])
-                current = ""
-            else:
-                current = word
-        if len(lines) >= max_lines:
+    all_lines: list[str] = []
+    segments = normalized.split("\n")
+    for segment in segments:
+        if len(all_lines) >= max_lines:
             break
-    if current and len(lines) < max_lines:
-        lines.append(current)
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-    if words and len(lines) == max_lines:
-        consumed = sum(len(line.split()) for line in lines)
-        if consumed < len(words):
-            lines[-1] = _ellipsize(lines[-1], width)
-    return [line.ljust(width)[:width] for line in lines]
+        remaining = max_lines - len(all_lines)
+        words = segment.split()
+        if not words:
+            all_lines.append("")
+            continue
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            candidate = word if not current else f"{current} {word}"
+            if len(candidate) <= width:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                if len(word) > width:
+                    lines.append(word[:width])
+                    current = ""
+                else:
+                    current = word
+            if len(lines) >= remaining:
+                break
+        if current and len(lines) < remaining:
+            lines.append(current)
+        if len(lines) > remaining:
+            lines = lines[:remaining]
+        if words and len(lines) == remaining:
+            consumed = sum(len(line.split()) for line in lines)
+            if consumed < len(words):
+                lines[-1] = _ellipsize(lines[-1], width)
+        all_lines.extend(lines)
+    if not all_lines:
+        return [""]
+    return [line.ljust(width)[:width] for line in all_lines][:max_lines]
 
 
 def _place_line(grid: _Grid, row_idx: int, text: str, align: str = "left", start_col: int = 0) -> None:
@@ -1120,7 +1133,7 @@ def _load_payload(path: str | None) -> Any:
     try:
         reader = csv.DictReader(io.StringIO(raw))
         rows = list(reader)
-        if rows and reader.fieldnames:
+        if rows and reader.fieldnames and len(reader.fieldnames) > 1:
             coerced = []
             for row in rows:
                 new_row = {}

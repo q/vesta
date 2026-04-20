@@ -139,6 +139,21 @@ class TestTruncation(unittest.TestCase):
         lines = _wrap_text("", 22, 6)
         self.assertEqual(lines, [""])
 
+    def test_wrap_text_newline_forces_line_break(self):
+        lines = _wrap_text("HELLO\nWORLD", 22, 6)
+        self.assertIn("HELLO", lines[0])
+        self.assertIn("WORLD", lines[1])
+
+    def test_wrap_text_newline_respects_max_lines(self):
+        lines = _wrap_text("A\nB\nC\nD\nE\nF\nG", 22, 6)
+        self.assertLessEqual(len(lines), 6)
+
+    def test_wrap_text_empty_newline_preserved_as_blank(self):
+        lines = _wrap_text("TOP\n\nBOTTOM", 22, 6)
+        self.assertIn("TOP", lines[0])
+        self.assertEqual(lines[1].strip(), "")
+        self.assertIn("BOTTOM", lines[2])
+
 
 class TestDatetimeCompaction(unittest.TestCase):
     def test_iso_flagship(self):
@@ -1152,6 +1167,12 @@ class TestLoadPayload(unittest.TestCase):
     def test_plain_text_falls_through(self):
         result = self._load_str("not json, not csv")
         self.assertEqual(result, "not json, not csv")
+
+    def test_multiline_text_not_parsed_as_csv(self):
+        # A newline alone shouldn't trigger CSV detection — requires multiple fields.
+        result = self._load_str("hello world\ngoodbye world")
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "hello world\ngoodbye world")
 
     def test_empty_input_returns_empty_string(self):
         result = self._load_str("   ")
