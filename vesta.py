@@ -4,7 +4,7 @@ try:
     from importlib.metadata import version
     __version__ = version("vestaboard-tools")
 except Exception:
-    __version__ = "0.5.0"  # fallback when running from source uninstalled
+    __version__ = "0.5.1"  # fallback when running from source uninstalled
 
 __all__ = [
     "BoardProfile",
@@ -368,16 +368,20 @@ _SEPARATOR_PATTERNS: dict[str, list[Color]] = {
 
 def _place_separator(grid: _Grid, row_idx: int, pattern: str) -> None:
     """Fill a row with a repeating color pattern.
-    Accepts a named pattern ('rainbow'), a single color name ('white'),
-    or comma-separated color names ('red,black')."""
+    Accepts a named pattern ('rainbow' or 'rainbow:N' to phase-shift by N),
+    a single color name ('white'), or comma-separated color names ('red,black')."""
     cols = len(grid[row_idx])
     key = pattern.strip().lower()
+    offset = 0
+    if ":" in key:
+        key, _, offset_str = key.partition(":")
+        offset = int(offset_str) if offset_str.isdigit() else 0
     if key in _SEPARATOR_PATTERNS:
         colors = _SEPARATOR_PATTERNS[key]
     else:
         colors = [_tone_to_color(p.strip()) or Color.WHITE for p in key.split(",")]
     for col in range(cols):
-        grid[row_idx][col] = colors[col % len(colors)]
+        grid[row_idx][col] = colors[(col + offset) % len(colors)]
 
 
 def _header_row_count(title: str | None, subtitle: str | None, separator: str | None) -> int:
@@ -1510,6 +1514,7 @@ def cli(argv: list[str] | None = None) -> int:
         p.add_argument("--force-timestamp", action="store_true", help="Add current time to bottom-right, overwriting if needed")
         p.add_argument("--tz", default=None, help="Timezone for timestamp, e.g. America/New_York (default: local)")
         p.add_argument("--separator", nargs="?", const="white", default=None, metavar="PATTERN", help="Add a separator row below the title block. PATTERN: color name, 'rainbow', or comma-separated colors (default: white)")
+        p.add_argument("--rainbow-offset", type=int, default=0, metavar="N", help="Phase-shift the rainbow separator by N positions (0-5)")
 
     render_p = sub.add_parser("render", help="Render and preview without posting")
     add_common(render_p)
@@ -1579,7 +1584,11 @@ def cli(argv: list[str] | None = None) -> int:
         print(f"warning: unknown color '{_sc_raw}' for --subtitle-color, ignoring", file=sys.stderr)
         _sc_raw = None
     subtitle_color: Color | list[Color] | None = _tone_to_color(_sc_raw) if _sc_raw else None
-    message = _build_message(profile, args.template, payload, args.title, valign=args.valign, align=args.align, title_color=title_color, subtitle=getattr(args, "subtitle", None), subtitle_color=subtitle_color, tz=args.tz, columns=args.columns, separator=getattr(args, "separator", None))
+    _separator = getattr(args, "separator", None)
+    _rainbow_offset = getattr(args, "rainbow_offset", 0)
+    if _separator == "rainbow" and _rainbow_offset:
+        _separator = f"rainbow:{_rainbow_offset}"
+    message = _build_message(profile, args.template, payload, args.title, valign=args.valign, align=args.align, title_color=title_color, subtitle=getattr(args, "subtitle", None), subtitle_color=subtitle_color, tz=args.tz, columns=args.columns, separator=_separator)
 
     if getattr(args, "force_timestamp", False) or getattr(args, "timestamp", False):
         message = _place_timestamp(message, tz=args.tz, force=getattr(args, "force_timestamp", False))
