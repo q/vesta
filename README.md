@@ -360,6 +360,24 @@ vesta render --input testdata/metrics_note.json --profile note --preview-only
 └──────────────────────────────┘
 ```
 
+## Escape sequences
+
+Color tiles and any Vestaboard character code can be embedded inline in text input using `{name}` or `{N}` syntax:
+
+| Escape | Result |
+|--------|--------|
+| `{red}`, `{green}`, `{blue}`, … | Color tile |
+| `{63}` – `{71}` | Color tile by code |
+| `{0}` – `{62}` | Any other character code |
+| `{anything_else}` | Rendered as `(anything_else)` |
+
+Color names match the Vestaboard tile set: `red`, `orange`, `yellow`, `green`, `blue`, `violet`, `white`, `black`, `filled`. `purple` is accepted as an alias for `violet`. Names are case-insensitive.
+
+```bash
+echo "STATUS {green} ALL GOOD" | vesta render --preview-only
+echo "ALERT {red} CHECK ENGINE" | vesta render --preview-only
+```
+
 **Get raw character codes** (for direct API use):
 
 ```bash
@@ -372,6 +390,12 @@ cat data.json | vesta render --json-only
 
 ```bash
 cat data.json | vesta post-cloud --token $VESTABOARD_TOKEN
+```
+
+Add `--forced` to send even during configured quiet hours:
+
+```bash
+cat data.json | vesta post-cloud --token $VESTABOARD_TOKEN --forced
 ```
 
 **Local API:**
