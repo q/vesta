@@ -1089,16 +1089,22 @@ def _render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | No
         tile_reserve = 1 if has_any_color else 0
         max_label = max((len(e["label"]) for e in visible), default=0)
         max_value = max((len(e["value"]) for e in visible), default=0)
-        block = min(max_label + max_value + tile_reserve, profile.cols)
+        # Compute the minimum separator so the densest row (longest label +
+        # longest value combined) still has 2 visual spaces between them.
+        # Rows with shorter labels/values get natural padding from ljust/rjust.
+        max_combined = max((len(e["label"]) + len(e["value"]) for e in visible), default=0)
+        slack = max_label + max_value - max_combined
+        sep = max(0, 2 - slack)
+        block = min(max_label + sep + max_value + tile_reserve, profile.cols)
         start_col = max(0, (profile.cols - block + 1) // 2)
 
         for entry in visible:
             color = entry["color"]
             left = _ellipsize(entry["label"], max_label).ljust(max_label)
             right = _ellipsize(entry["value"], max_value).rjust(max_value)
-            _place_line(grid, row, f"{left}{right}", align="left", start_col=start_col)
+            _place_line(grid, row, left + " " * sep + right, align="left", start_col=start_col)
             if color and profile.cols >= 12:
-                _place_cell(grid, row, start_col + max_label + max_value, color)
+                _place_cell(grid, row, start_col + max_label + sep + max_value, color)
             row += 1
             if row >= profile.rows:
                 break
