@@ -43,11 +43,11 @@ Field name suffixes control formatting automatically. The suffix is stripped fro
 | Suffix | Effect |
 |--------|--------|
 | `_pct` / `_percent` | formats value as `3.2%` |
-| `_curr` | formats value as `$84.2K` |
+| `_curr` | formats value as `$184.2K` |
 
 ```json
 {
-  "revenue_curr": 84210.50,
+  "revenue_curr": 184210.50,
   "sessions": 10823,
   "growth_pct": 12.4
 }
@@ -56,7 +56,7 @@ Field name suffixes control formatting automatically. The suffix is stripped fro
 Renders as:
 
 ```
-REVENUE   $84.2K
+REVENUE   $184.2K
 SESSIONS  10.8K
 GROWTH    12.4%
 ```
@@ -323,10 +323,10 @@ Use `--align left` or `--align right` to spread columns edge-to-edge instead.
 
 ```bash
 echo '{
-  "revenue_curr": 84210.50,
+  "revenue_curr": 184210.50,
   "sessions": 10823,
-  "conversion_pct": 3.2,
-  "bounce_rate_pct": 68.4,
+  "conversion_pct": 13.2,
+  "bounce_rate_pct": 48.4,
   "_style": {
     "revenue_curr": "good",
     "conversion_pct": {"good": 8, "bad": 2},
@@ -338,10 +338,10 @@ echo '{
 ```
 ┌────────────── flagship 6x22 ───────────────┐
 │                                            │
-│    R E V E N U E   $ 8 4 . 2 K ██          │
+│    R E V E N U E   $ 1 8 4 . 2 K ██        │
 │    S E S S I O N S   1 0 . 8 K             │
-│    C O N V E R S I O N   3 . 2 % ██        │
-│    B O U N C E   R A T E   6 8 . 4 % ██    │
+│    C O N V E R S I O N   1 3 . 2 % ██      │
+│    B O U N C E   R A T E   4 8 . 4 % ██    │
 │                                  9 : 3 4 P │
 └────────────────────────────────────────────┘
 ```
@@ -354,7 +354,7 @@ vesta render --input testdata/metrics_note.json --profile note --preview-only
 
 ```
 ┌───────── note 3x15 ──────────┐
-│T E M P           $ 7 2 . 0 0 │
+│T E M P                   7 2 │
 │H U M I D I T Y         5 4 % │
 │C H A N G E       - 2 . 1 % ██│
 └──────────────────────────────┘
