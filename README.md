@@ -124,6 +124,15 @@ Aliases: `purple` → violet, `grey`/`gray` → black.
 | 3rd quarter | orange | 50–75% |
 | 4th quarter | red | 75–100% (and beyond) |
 
+The range object also accepts an optional `"decimals"` key to fix the number of decimal places shown for percentage fields. Useful for "nines" availability metrics where the default rounding would collapse `99.97%` to `100%`:
+
+```json
+{
+  "uptime_pct": 99.97,
+  "_style": { "uptime_pct": {"good": 100, "bad": 95, "decimals": 2} }
+}
+```
+
 **Suppressing a tile** — use `"none"` to prevent a color tile on a field that would otherwise get one (e.g. auto-detected fields where you want plain output):
 
 ```json

@@ -4,7 +4,8 @@
   "error_pct": 0.13,
   "rps": 1847,
   "_style": {
-    "uptime_pct": {"good": 100, "bad": 95},
+    "uptime_pct": {"good": 100, "bad": 95, "decimals": 2},
+    "render ms": {"good": 10, "bad": 100},
     "error_pct": {"good": 0, "bad": 5}
   }
 }

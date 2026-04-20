@@ -4,7 +4,7 @@ try:
     from importlib.metadata import version
     __version__ = version("vestaboard-tools")
 except Exception:
-    __version__ = "0.5.1"  # fallback when running from source uninstalled
+    __version__ = "0.5.2"  # fallback when running from source uninstalled
 
 __all__ = [
     "BoardProfile",
@@ -588,7 +588,7 @@ def _compact_datetime(value: Any, profile: BoardProfile) -> str:
     return f"{dt.month}/{dt.day} {hour_12}:{dt.minute:02d}{suffix}"
 
 
-def _format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
+def _format_metric_value(value: Any, kind: str, profile: BoardProfile, decimals: int | None = None) -> str:
     if kind == "datetime":
         return _compact_datetime(value, profile)
 
@@ -599,7 +599,10 @@ def _format_metric_value(value: Any, kind: str, profile: BoardProfile) -> str:
                 return f"${_compact_number(n)}"
             return f"${n:.2f}"
         if kind == "percent":
-            return f"{_smart_round(n, sig_figs=3)}%"
+            if decimals is not None:
+                return f"{n:.{decimals}f}".rstrip("0").rstrip(".") + "%"
+            sig_figs = 4 if abs(n) >= 10 else 3
+            return f"{_smart_round(n, sig_figs=sig_figs)}%"
         if kind == "auto":
             return _compact_number(n)
     if kind == "percent":
@@ -1053,7 +1056,13 @@ def _format_field(key: str, value: Any, profile: BoardProfile, style: dict | Non
     else:
         kind = "auto"
     label = _prettify_label(key)
-    formatted = _format_metric_value(value, kind, profile)
+    decimals: int | None = None
+    if style and isinstance(style.get(key), dict):
+        try:
+            decimals = int(style[key]["decimals"])
+        except (KeyError, TypeError, ValueError):
+            pass
+    formatted = _format_metric_value(value, kind, profile, decimals=decimals)
     data = {key: value}
     if style:
         data["_style"] = style
@@ -1355,7 +1364,13 @@ def _explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: bo
             kind = None
 
         label = _prettify_label(key)
-        fmt_value = _format_metric_value(value, kind or "auto", profile)
+        decimals: int | None = None
+        if isinstance(style, dict) and isinstance(style.get(key), dict):
+            try:
+                decimals = int(style[key]["decimals"])
+            except (KeyError, TypeError, ValueError):
+                pass
+        fmt_value = _format_metric_value(value, kind or "auto", profile, decimals=decimals)
 
         # Color indicators section
         tone = _resolve_tone(data, key, value)
@@ -1425,6 +1440,8 @@ def _explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: bo
                 fmt_parts.append("label stripped")
             if value_changed:
                 fmt_parts.append("percent format")
+            if decimals is not None:
+                fmt_parts.append(f"decimals: {decimals}")
         else:
             fmt_parts = ["auto compaction"]
 
