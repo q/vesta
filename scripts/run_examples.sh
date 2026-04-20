@@ -55,3 +55,6 @@ run "server metrics with color indicators" \
 
 run "stocks table" \
   "uv run vesta.py render --input testdata/stocks.json --preview-only"
+
+run "color tiles + escape sequences" \
+  "uv run vesta.py render --input testdata/colors.txt --valign center --preview-only"
