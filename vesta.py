@@ -1560,7 +1560,7 @@ def cli(argv: list[str] | None = None) -> int:
     read_cloud_p.add_argument("--token", default=os.getenv("VESTABOARD_TOKEN"))
     read_cloud_p.add_argument("--profile", choices=sorted(PROFILES), default=None, help="Override profile (auto-detected from grid dimensions if omitted)")
     read_cloud_p.add_argument("--visible-spaces", action="store_true")
-    read_cloud_p.add_argument("--cell-width", type=int, default=2)
+    read_cloud_p.add_argument("--cell-width", type=int, default=2, help="Terminal preview width per board cell")
     read_cloud_p.add_argument("--no-ansi", action="store_true")
     read_cloud_p.add_argument("--json-only", action="store_true", help="Print only the raw character array JSON")
 
