@@ -762,14 +762,16 @@ def _tone_to_color(tone: str | None) -> Color | None:
 # -----------------------------------------------------------------------------
 
 
-def render_text(profile: BoardProfile, text: str, align: str = "center", valign: str = "center") -> RenderedMessage:
+def render_text(profile: BoardProfile, text: str, align: str = "center", valign: str = "center", title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, separator: str | None = None) -> RenderedMessage:
     text = _expand_escapes(text)
     grid = _blank_grid(profile)
-    lines = _wrap_text(text, profile.cols, profile.rows)
+    header_row = _place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator)
+    available_rows = profile.rows - header_row
+    lines = _wrap_text(text, profile.cols, available_rows)
     if valign == "center":
-        top = max(0, (profile.rows - len(lines)) // 2)
+        top = header_row + max(0, (available_rows - len(lines)) // 2)
     else:
-        top = 0
+        top = header_row
     for i, line in enumerate(lines):
         _place_line(grid, top + i, line.rstrip(), align=align)
     return RenderedMessage(profile=profile, grid=grid)
@@ -1151,12 +1153,12 @@ def _render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | No
 def render_auto(profile: BoardProfile, payload: Any, title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, align: str | None = None, valign: str = "top", separator: str | None = None) -> RenderedMessage:
     """Infer the best renderer from the payload type and content."""
     if isinstance(payload, str):
-        return render_text(profile, payload, valign=valign)
+        return render_text(profile, payload, valign=valign, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, separator=separator)
     if isinstance(payload, dict):
         return render_data(profile, payload, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, align=align, valign=valign, separator=separator)
     if isinstance(payload, list) and payload and all(isinstance(x, dict) for x in payload):
         return render_data(profile, payload, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, align=align, valign=valign, separator=separator)
-    return render_text(profile, json.dumps(payload, separators=(",", ":")), align="left", valign=valign)
+    return render_text(profile, json.dumps(payload, separators=(",", ":")), align="left", valign=valign, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, separator=separator)
 
 
 # -----------------------------------------------------------------------------
@@ -1497,7 +1499,7 @@ def _build_message(profile: BoardProfile, template: str, payload: Any, title: st
     if _is_raw_grid(payload, profile):
         return _from_characters(payload, profile)
     if template == "text":
-        return render_text(profile, str(payload), valign=valign)
+        return render_text(profile, str(payload), valign=valign, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, separator=separator)
     if template == "kv":
         if not isinstance(payload, dict):
             raise SystemExit("template=kv requires a JSON object")
