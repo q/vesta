@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/github/license/q/vesta)](LICENSE)
 [![Website](https://img.shields.io/badge/website-vestaboard.tools-blue)](https://vestaboard.tools)
 
-A small Python formatter / previewer / publisher for Vestaboard devices.
+A small Python formatter / previewer / publisher for Vestaboard devices. → **[vestaboard.tools](https://vestaboard.tools)**
 
 **semantic input → board layout → terminal preview → optional publish**
 
