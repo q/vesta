@@ -16,6 +16,7 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
+    "pytest>=9.0.3",
     "requests>=2.28",
 ]
 
