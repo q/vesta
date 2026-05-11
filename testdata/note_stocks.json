@@ -1,0 +1,4 @@
+[
+  {"ticker": "AAPL", "change_pct": 1.23},
+  {"ticker": "NVDA", "change_pct": -2.14}
+]

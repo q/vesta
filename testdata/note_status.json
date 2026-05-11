@@ -1,0 +1,9 @@
+{
+  "uptime_pct": 99.97,
+  "error_pct": 0.13,
+  "rps": 1847,
+  "_style": {
+    "uptime_pct": {"good": 100, "bad": 95},
+    "error_pct": {"good": 0, "bad": 5}
+  }
+}
