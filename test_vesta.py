@@ -831,15 +831,14 @@ class TestRenderKv(unittest.TestCase):
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         self.assertIn("72", all_chars)
 
-    def test_note_1col_label_on_row0_value_on_row1(self):
+    def test_note_1col_label_and_value_inline(self):
         msg = render_kv(NOTE, {"temp": 72})
         row0 = "".join(c for c in msg.grid[0] if isinstance(c, str))
-        row1 = "".join(c for c in msg.grid[1] if isinstance(c, str))
         self.assertIn("TEMP", row0)
-        self.assertIn("72", row1)
+        self.assertIn("72", row0)
 
     def test_note_1col_two_pairs_fit(self):
-        # Each pair uses 2 rows; 2 pairs fill all 3 rows of NOTE (second value dropped).
+        # Each pair uses 1 row inline; 2 pairs fit in 3 rows with 1 blank row.
         msg = render_kv(NOTE, {"a": 1, "b": 2})
         all_chars = "".join(c for row in msg.grid for c in row if isinstance(c, str))
         self.assertIn("A", all_chars)
@@ -1290,13 +1289,13 @@ class TestNoteEdgeCases(unittest.TestCase):
         msg = _place_timestamp(msg)
         self.assertNotEqual(msg.grid[-1], last_before)
 
-    def test_timestamp_skipped_on_note_when_last_row_full(self):
-        # With a title + 1 kv pair: title→row0, label→row1, value right-aligned→row2.
-        # The value occupies the rightmost cell, which blocks the timestamp buffer.
+    def test_timestamp_placed_on_note_when_last_row_blank(self):
+        # With a title + 1 inline kv pair: title→row0, pair→row1, row2 blank.
+        # Timestamp lands in the blank last row.
         msg = render_kv(NOTE, {"a": 1}, title="T")
         last_before = list(msg.grid[-1])
         msg = _place_timestamp(msg)
-        self.assertEqual(msg.grid[-1], last_before)
+        self.assertNotEqual(msg.grid[-1], last_before)
 
     def test_force_timestamp_on_note_overwrites(self):
         msg = render_kv(NOTE, {"a": 1, "b": 2})

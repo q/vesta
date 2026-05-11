@@ -245,6 +245,18 @@ def _ellipsize(text: str, width: int) -> str:
     return text[:width]
 
 
+def _truncate_label(text: str, width: int) -> str:
+    """Truncate a label to width, snapping to the nearest word boundary when possible.
+    Falls back to a hard character cut if no usable word boundary exists."""
+    if len(text) <= width:
+        return text
+    cut = text[:width]
+    last_space = cut.rfind(" ")
+    if last_space > width // 2:
+        return cut[:last_space]
+    return cut
+
+
 def _wrap_text(text: str, width: int, max_lines: int) -> list[str]:
     normalized = _normalize_text(text)
     if not normalized.strip():
@@ -634,7 +646,7 @@ def _format_metric_value(value: Any, kind: str, profile: BoardProfile, decimals:
     return _normalize_text(_format_scalar(value))
 
 
-def _infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: int) -> dict[str, int]:
+def _infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: int, fill: bool = False) -> dict[str, int]:
     if not columns:
         return {}
 
@@ -661,6 +673,16 @@ def _infer_widths(columns: list[str], rows: list[dict[str, Any]], total_width: i
                     break
         if not made_progress:
             break
+
+    # On narrow profiles, distribute any space still unused after all columns reach
+    # natural width so the table fills the board rather than centering a small block.
+    if fill:
+        while remaining > 0:
+            for col in columns:
+                base[col] += 1
+                remaining -= 1
+                if remaining == 0:
+                    break
 
     return base
 
@@ -889,9 +911,7 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
     has_any_color = any(_tone_to_color(_resolve_tone(data, k, v)) for k, v in items)
     reserve = 1 if has_any_color and profile.cols >= 12 else 0
     items = items[: available_rows]
-
-    rows_per_item = 1 if profile.cols >= 18 else 2
-    n_content_rows = min(len(items) * rows_per_item, available_rows)
+    n_content_rows = min(len(items), available_rows)
     row = header_row + (max(0, (available_rows - n_content_rows) // 2) if valign == "center" else 0)
 
     for key, value in items:
@@ -899,21 +919,18 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
             break
         key_s = _prettify_label(key)
         value_s = _kv_format_value(key, value)
-        if profile.cols >= 18:
-            left_width = min(max(len(key_s), 6), profile.cols // 2)
-            right_width = profile.cols - left_width - 1 - reserve
-            left = _ellipsize(key_s, left_width).ljust(left_width)
-            right = _ellipsize(value_s, right_width).rjust(right_width)
-            _place_line(grid, row, f"{left} {right}", align="left")
-            color = _tone_to_color(_resolve_tone(data, key, value))
-            if color and reserve:
-                _place_cell(grid, row, profile.cols - 1, color)
+        if profile.cols < 18:
+            value_need = min(len(value_s), profile.cols // 2)
+            left_width = min(max(len(key_s), 6), profile.cols - value_need - 1 - reserve)
         else:
-            _place_line(grid, row, _ellipsize(key_s, profile.cols - 1), align="left")
-            row += 1
-            if row >= profile.rows:
-                break
-            _place_line(grid, row, _ellipsize(value_s, profile.cols), align="right")
+            left_width = min(max(len(key_s), 6), profile.cols // 2)
+        right_width = profile.cols - left_width - 1 - reserve
+        left = _ellipsize(key_s, left_width).ljust(left_width)
+        right = _ellipsize(value_s, right_width).rjust(right_width)
+        _place_line(grid, row, f"{left} {right}", align="left")
+        color = _tone_to_color(_resolve_tone(data, key, value))
+        if color and reserve:
+            _place_cell(grid, row, profile.cols - 1, color)
         row += 1
 
     return RenderedMessage(profile=profile, grid=grid)
@@ -968,7 +985,7 @@ def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str 
         {col: _format_field(col, record.get(col, ""), profile)[1] for col in columns}
         for record in rows
     ]
-    widths = _infer_widths(columns, formatted_rows, available_cols)
+    widths = _infer_widths(columns, formatted_rows, available_cols, fill=profile.cols < 18)
 
     # Auto-switch to left spread when content is too tight to center with gaps.
     if align not in ("left", "right") and len(columns) > 1:
@@ -1137,7 +1154,8 @@ def _render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | No
             min_value_space = min(len(entry["value"]), max(4, available_width // 3))
             left_width = max(4, min(len(entry["label"]), available_width - min_value_space - 1))
             right_width = max(1, available_width - left_width - 1)
-            left = _ellipsize(entry["label"], left_width).ljust(left_width)
+            truncate = _truncate_label if profile.cols < 18 else _ellipsize
+            left = truncate(entry["label"], left_width).ljust(left_width)
             right = _ellipsize(entry["value"], right_width).rjust(right_width)
             _place_line(grid, row, f"{left} {right}", align="left")
 
