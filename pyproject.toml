@@ -1,6 +1,6 @@
 [project]
 name = "vestaboard-tools"
-version = "0.5.3"
+version = "0.5.4"
 description = "Formatter, previewer, and publisher for Vestaboard devices"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,8 +16,7 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "pytest>=9.0.3",
-    "requests>=2.28",
+    "requests>=2.28,<3",
 ]
 
 [project.urls]

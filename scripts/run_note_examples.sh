@@ -7,7 +7,7 @@ set -e
 run() {
   echo "--- $1 ---"
   shift
-  eval "$@"
+  bash -c "$*"
   echo
 }
 

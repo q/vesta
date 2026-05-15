@@ -4,7 +4,7 @@ try:
     from importlib.metadata import version
     __version__ = version("vestaboard-tools")
 except Exception:
-    __version__ = "0.5.3"  # fallback when running from source uninstalled
+    __version__ = "0.5.4"  # fallback when running from source uninstalled
 
 __all__ = [
     "BoardProfile",
@@ -31,6 +31,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from urllib.parse import urlparse
 from datetime import datetime
 from enum import IntEnum
 from typing import Any
@@ -521,8 +522,11 @@ def _key_is_curr(key: str) -> bool:
 
 def _prettify_label(key: str) -> str:
     label = _normalize_text(key)
-    # Strip trailing suffixes where the formatting carries the meaning.
-    label = re.sub(r"[_ ]+(PCT|PERCENT|CURR)$", "", label)
+    # str.endswith instead of regex: avoids catastrophic backtracking on keys with many underscores.
+    for suffix in ("_PCT", "_PERCENT", "_CURR", " PCT", " PERCENT", " CURR"):
+        if label.endswith(suffix):
+            label = label[:-len(suffix)]
+            break
     return label.replace("_", " ").strip()
 
 
@@ -1082,7 +1086,8 @@ def _format_field(key: str, value: Any, profile: BoardProfile, style: dict | Non
     decimals: int | None = None
     if style and isinstance(style.get(key), dict):
         try:
-            decimals = int(style[key]["decimals"])
+            # Cap at 10: board is 22 columns wide, so more decimal places are never meaningful.
+            decimals = max(0, min(int(style[key]["decimals"]), 10))
         except (KeyError, TypeError, ValueError):
             pass
     formatted = _format_metric_value(value, kind, profile, decimals=decimals)
@@ -1252,17 +1257,30 @@ def read_cloud(token: str, profile: BoardProfile | None = None, timeout: int = 1
     return _from_characters(chars, profile or _detect_profile(chars))
 
 
+_MAX_RESPONSE_BYTES = 65_536
+
+
+def _safe_json(r: Any) -> dict[str, Any]:
+    cl = r.headers.get("Content-Length")
+    if cl and int(cl) > _MAX_RESPONSE_BYTES:
+        return {"status": r.status_code, "text": f"[response too large: {cl} bytes]"}
+    try:
+        return r.json()
+    except Exception:
+        return {"status": r.status_code, "text": r.text[:_MAX_RESPONSE_BYTES]}
+
+
 def _raise_for_status(r: Any) -> None:
     """Raise SystemExit with a human-readable message on HTTP errors."""
     if r.status_code < 400:
         return
     if r.status_code == 400:
-        raise SystemExit(f"error: malformed request (400) — {r.text.strip()}")
+        raise SystemExit(f"error: malformed request (400) — {r.text.strip()[:200]}")
     if r.status_code == 401:
         raise SystemExit("error: authentication failed (401) — check your token or API key")
     if r.status_code == 409:
         raise SystemExit("error: board rejected the post (409 Conflict) — posted too recently, wait a moment and try again")
-    raise SystemExit(f"error: API request failed ({r.status_code}): {r.text.strip()}")
+    raise SystemExit(f"error: API request failed ({r.status_code}): {r.text.strip()[:200]}")
 
 
 def post_cloud(token: str, message: RenderedMessage, forced: bool = False, timeout: int = 10) -> dict[str, Any]:
@@ -1279,10 +1297,7 @@ def post_cloud(token: str, message: RenderedMessage, forced: bool = False, timeo
         timeout=timeout,
     )
     _raise_for_status(r)
-    try:
-        return r.json()
-    except Exception:
-        return {"status": r.status_code, "text": r.text}
+    return _safe_json(r)
 
 
 def post_local(
@@ -1294,6 +1309,9 @@ def post_local(
     step_size: int | None = None,
     timeout: int = 10,
 ) -> dict[str, Any]:
+    _scheme = urlparse(host).scheme
+    if _scheme not in ("http", "https"):
+        raise ValueError(f"Invalid host scheme: {_scheme!r}")
     payload: Any = message.to_characters()
     if strategy or step_interval_ms or step_size:
         payload = {"characters": message.to_characters()}
@@ -1314,10 +1332,7 @@ def post_local(
         timeout=timeout,
     )
     _raise_for_status(r)
-    try:
-        return r.json()
-    except Exception:
-        return {"status": r.status_code, "text": r.text}
+    return _safe_json(r)
 
 
 # -----------------------------------------------------------------------------
@@ -1391,7 +1406,8 @@ def _explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: bo
         decimals: int | None = None
         if isinstance(style, dict) and isinstance(style.get(key), dict):
             try:
-                decimals = int(style[key]["decimals"])
+                # Cap at 10: board is 22 columns wide, so more decimal places are never meaningful.
+                decimals = max(0, min(int(style[key]["decimals"]), 10))
             except (KeyError, TypeError, ValueError):
                 pass
         fmt_value = _format_metric_value(value, kind or "auto", profile, decimals=decimals)

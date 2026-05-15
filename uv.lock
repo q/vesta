@@ -580,10 +580,9 @@ wheels = [
 
 [[package]]
 name = "vestaboard-tools"
-version = "0.5.2"
+version = "0.5.3"
 source = { editable = "." }
 dependencies = [
-    { name = "pytest" },
     { name = "requests" },
 ]
 
@@ -595,10 +594,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "requests", specifier = ">=2.28" },
-]
+requires-dist = [{ name = "requests", specifier = ">=2.28,<3" }]
 
 [package.metadata.requires-dev]
 dev = [
