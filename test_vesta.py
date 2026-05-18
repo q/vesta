@@ -707,6 +707,32 @@ class TestRenderText(unittest.TestCase):
         row0_chars = [c for c in msg.grid[0] if isinstance(c, str) and c != " "]
         self.assertEqual(row0_chars, [], "Expected row 0 blank for valign=center via _build_message")
 
+    def test_text_with_full_header_does_not_crash(self):
+        msg = render_text(
+            NOTE,
+            "HELLO",
+            title="T",
+            title_color=Color.WHITE,
+            subtitle="S",
+            separator="white",
+        )
+        self.assertEqual(len(msg.grid), NOTE.rows)
+        self.assertEqual(len(msg.grid[0]), NOTE.cols)
+
+    def test_text_template_resolves_subtitle_time(self):
+        from vesta import _build_message
+        msg = _build_message(
+            FLAGSHIP,
+            "text",
+            "HELLO",
+            "TITLE",
+            title_color=Color.WHITE,
+            subtitle="time",
+        )
+        subtitle_row = "".join(c for c in msg.grid[1] if isinstance(c, str))
+        self.assertNotIn("TIME", subtitle_row)
+        self.assertTrue("A" in subtitle_row or "P" in subtitle_row)
+
 
 class TestRenderKv(unittest.TestCase):
     def test_underscore_keys_filtered(self):

@@ -438,6 +438,8 @@ cat data.json | vesta post-cloud --token $VESTABOARD_TOKEN --forced
 cat data.json | vesta post-local --api-key $VESTABOARD_LOCAL_API_KEY
 ```
 
+`VESTABOARD_LOCAL_HOST` / `--host` should point only at your own Vestaboard Local API endpoint. The local API key is sent to that host.
+
 **Preview current board state:**
 
 ```bash

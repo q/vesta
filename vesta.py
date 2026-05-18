@@ -793,6 +793,8 @@ def render_text(profile: BoardProfile, text: str, align: str = "center", valign:
     grid = _blank_grid(profile)
     header_row = _place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator)
     available_rows = profile.rows - header_row
+    if available_rows <= 0:
+        return RenderedMessage(profile=profile, grid=grid)
     lines = _wrap_text(text, profile.cols, available_rows)
     if valign == "center":
         top = header_row + max(0, (available_rows - len(lines)) // 2)
@@ -1533,7 +1535,7 @@ def _build_message(profile: BoardProfile, template: str, payload: Any, title: st
     if _is_raw_grid(payload, profile):
         return _from_characters(payload, profile)
     if template == "text":
-        return render_text(profile, str(payload), valign=valign, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, separator=separator)
+        return render_text(profile, str(payload), valign=valign, title=title, title_color=title_color, subtitle=resolved_subtitle, subtitle_color=subtitle_color, separator=separator)
     if template == "kv":
         if not isinstance(payload, dict):
             raise SystemExit("template=kv requires a JSON object")
