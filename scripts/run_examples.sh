@@ -26,6 +26,9 @@ run "CSV table" \
 run "JSON table" \
   "uv run vesta.py render --input testdata/table.json --preview-only"
 
+run "JSON table (edge-to-edge, --align left)" \
+  "uv run vesta.py render --input testdata/table2.json --align left --preview-only"
+
 run "metrics (plain)" \
   "uv run vesta.py render --input testdata/metrics.json --preview-only"
 
@@ -58,6 +61,12 @@ run "weather (2-col centered)" \
 
 run "server metrics with color indicators" \
   "uv run vesta.py render --input testdata/server.json --valign center --align center --explain --preview-only"
+
+run "auto color by field name (change/delta/diff)" \
+  "uv run vesta.py render --input testdata/autodetect.json --explain --preview-only"
+
+run "signed values + suppressed tile (_style)" \
+  "uv run vesta.py render --input testdata/budget.json --explain --preview-only"
 
 run "stocks table" \
   "uv run vesta.py render --input testdata/stocks.json --preview-only"
