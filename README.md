@@ -179,6 +179,10 @@ Adds a full-width row of colored tiles below the title block (after subtitle if 
 | `rainbow` | R O Y G B V cycling |
 | `red,black` | alternating colors |
 
+**`--rainbow-offset N`**
+
+Phase-shifts the `rainbow` separator by `N` positions (0-5). Has no effect on solid or alternating patterns. Useful for keeping repeating boards visually distinct from one render to the next without changing any other data.
+
 ```bash
 echo '{"temp":"68F","hum_pct":42,"co2":"820","noise":"38"}' | \
   vesta render --template kv --title "HOME" --separator rainbow --preview-only
