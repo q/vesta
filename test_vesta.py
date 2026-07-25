@@ -1660,5 +1660,80 @@ class TestRenderTextEscapes(unittest.TestCase):
         self.assertEqual(msg_name.to_characters(), msg_code.to_characters())
 
 
+class TestDroppedContentWarning(unittest.TestCase):
+    """Content discarded because the board is too short should be reported.
+
+    Previously these paths sliced silently, so a scripted publish could lose a
+    field with no signal in stderr, the exit code, or --explain.
+    """
+
+    def _capture(self, fn):
+        import contextlib
+
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            result = fn()
+        return result, buf.getvalue()
+
+    def test_kv_one_column_warns_and_records_dropped(self):
+        data = {c: i for i, c in enumerate("abcdefgh")}  # 8 fields, 6 rows
+        msg, err = self._capture(lambda: render_kv(FLAGSHIP, data))
+        self.assertIn("2 field(s) dropped", err)
+        self.assertIn("G", err)
+        self.assertIn("H", err)
+        self.assertEqual(msg.dropped, ["G", "H"])
+
+    def test_kv_two_column_warns_on_overflow(self):
+        data = {c: 1 for c in "abcdefghijklmn"}  # 14 fields, 12 slots
+        msg, err = self._capture(lambda: render_kv(FLAGSHIP, data, columns=2))
+        self.assertIn("2 field(s) dropped", err)
+        self.assertEqual(msg.dropped, ["M", "N"])
+
+    def test_two_column_fallback_warns_exactly_once(self):
+        # Wide content forces the 2-col path to fall back to 1-col. The drop
+        # warning must describe the layout actually rendered and fire once.
+        data = {
+            "averylonglabelone": "valuevaluevalue",
+            "averylonglabeltwo": "valuevaluevalue",
+            "c": 3, "d": 4, "e": 5, "f": 6, "g": 7, "h": 8,
+        }
+        msg, err = self._capture(lambda: render_kv(FLAGSHIP, data, columns=2))
+        self.assertEqual(err.count("dropped (board too short)"), 1)
+        self.assertEqual(msg.dropped, ["G", "H"])
+
+    def test_metrics_warns_on_note(self):
+        data = {"cpu_pct": 91, "mem_pct": 72, "disk_pct": 55, "net": "1.2G", "errors": 3}
+        msg, err = self._capture(lambda: _render_metrics(NOTE, data))
+        self.assertIn("2 field(s) dropped", err)
+        self.assertEqual(msg.dropped, ["NET", "ERRORS"])
+
+    def test_table_warns_and_names_dropped_rows(self):
+        rows = [{"n": f"r{i}", "v": i} for i in range(1, 10)]
+        msg, err = self._capture(lambda: _render_table(FLAGSHIP, rows))
+        self.assertIn("row(s) dropped", err)
+        self.assertIn("R6", err)
+        self.assertEqual(len(msg.dropped), 4)
+
+    def test_kv_no_warning_when_everything_fits(self):
+        msg, err = self._capture(lambda: render_kv(FLAGSHIP, {"a": 1, "b": 2}))
+        self.assertEqual(err, "")
+        self.assertEqual(msg.dropped, [])
+
+    def test_metrics_no_warning_when_everything_fits(self):
+        msg, err = self._capture(lambda: _render_metrics(NOTE, {"a": 1, "b": 2, "c": 3}))
+        self.assertEqual(err, "")
+        self.assertEqual(msg.dropped, [])
+
+    def test_explain_lists_dropped_fields(self):
+        out = _explain_metrics({"cpu_pct": 91}, NOTE, ansi_color=False, dropped=["NET", "ERRORS"])
+        self.assertIn("dropped (board too short)", out)
+        self.assertIn("NET", out)
+        self.assertIn("ERRORS", out)
+
+    def test_explain_omits_dropped_section_when_nothing_dropped(self):
+        out = _explain_metrics({"cpu_pct": 91}, NOTE, ansi_color=False, dropped=[])
+        self.assertNotIn("dropped (board too short)", out)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -259,6 +259,28 @@ IANA timezone for the timestamp, e.g. `America/New_York`. Defaults to local syst
 
 Board profile. Auto-detected from API grid dimensions when publishing. Defaults to flagship.
 
+## When content does not fit
+
+A board has a fixed number of rows (6 on flagship, 3 on note), and titles, subtitles, and separators each consume one. Fields or table rows beyond that limit cannot be shown, so vesta drops them and reports what was lost on stderr:
+
+```bash
+echo '{"cpu_pct":91,"mem_pct":72,"disk_pct":55,"net":"1.2G","errors":3}' | \
+  vesta render --profile note --preview-only
+```
+
+```
+warning: 2 field(s) dropped (board too short): NET, ERRORS
+┌───────── note 3x15 ──────────┐
+│C P U                   9 1 % │
+│M E M                   7 2 % │
+│D I S K                 5 5 % │
+└──────────────────────────────┘
+```
+
+`--explain` lists the same fields in a `dropped` section. The warning goes to stderr and the exit code stays 0, so it will not break a pipeline — but it is worth capturing in scripts that publish unattended, since an added field can silently push another one off the board.
+
+Columns are handled separately: a table too wide for the profile drops columns with its own warning, and `--columns 2` falls back to a single column when a pair will not fit.
+
 ## Example usage
 
 **Text:**

@@ -24,6 +24,7 @@ __all__ = [
 
 import argparse
 import csv
+import dataclasses
 import io
 import json
 import math
@@ -179,6 +180,10 @@ _Grid = list[list[_Cell]]
 class RenderedMessage:
     profile: BoardProfile
     grid: _Grid
+    # Labels of any fields/rows the board was too short to show. Recorded by the
+    # renderer so --explain reports exactly what was dropped, rather than
+    # re-deriving the header arithmetic and risking disagreement with the render.
+    dropped: list[str] = dataclasses.field(default_factory=list)
 
     def to_characters(self) -> list[list[int]]:
         """Encode the grid to Vestaboard character codes."""
@@ -783,6 +788,29 @@ def _tone_to_color(tone: str | None) -> Color | None:
     return _TONE_TO_COLOR.get(tone.lower())
 
 
+def _warn_dropped(kind: str, names: list[str]) -> None:
+    """Warn when the board is too short to hold everything the caller supplied.
+
+    Mirrors the column-drop warning in _render_table: any time content the caller
+    provided does not make it onto the board, say so on stderr instead of dropping
+    it silently. Matters most for scripted publishing, where nobody is watching the
+    preview and an extra field would otherwise vanish without a trace.
+    """
+    if not names:
+        return
+    print(
+        f"warning: {len(names)} {kind}(s) dropped (board too short): {', '.join(names)}",
+        file=sys.stderr,
+    )
+
+
+def _row_name(record: dict[str, Any], columns: list[str]) -> str:
+    """Identify a table row by its first visible column, for drop warnings."""
+    if not columns:
+        return "?"
+    return _normalize_text(_format_scalar(record.get(columns[0], ""))) or "?"
+
+
 # -----------------------------------------------------------------------------
 # Renderers
 # -----------------------------------------------------------------------------
@@ -823,6 +851,9 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
     style = data.get("_style") if isinstance(data.get("_style"), dict) else None
     # Skip internal hint keys (e.g. _style, _template).
     items = [(k, v) for k, v in data.items() if not k.startswith("_")]
+    # Keep the untruncated list so the drop warning reflects the layout actually
+    # rendered, even when the 2-col path falls back to 1-col partway through.
+    all_items = items
     available_rows = max(0, profile.rows - header_row)
 
     if columns == 2:
@@ -909,13 +940,17 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
                             _place_cell(grid, row, tile_right_col, color)
 
                 row += 1
-            return RenderedMessage(profile=profile, grid=grid)
+            dropped = [_prettify_label(k) for k, _ in all_items[available_rows * 2 :]]
+            _warn_dropped("field", dropped)
+            return RenderedMessage(profile=profile, grid=grid, dropped=dropped)
 
     # columns == 1 path
     # Reserve 1 cell for a color tile only when an entry will actually produce one.
     # Check _resolve_tone unconditionally — auto-detection works without _style.
     has_any_color = any(_tone_to_color(_resolve_tone(data, k, v)) for k, v in items)
     reserve = 1 if has_any_color and profile.cols >= 12 else 0
+    dropped = [_prettify_label(k) for k, _ in all_items[available_rows:]]
+    _warn_dropped("field", dropped)
     items = items[: available_rows]
     n_content_rows = min(len(items), available_rows)
     row = header_row + (max(0, (available_rows - n_content_rows) // 2) if valign == "center" else 0)
@@ -939,7 +974,7 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
             _place_cell(grid, row, profile.cols - 1, color)
         row += 1
 
-    return RenderedMessage(profile=profile, grid=grid)
+    return RenderedMessage(profile=profile, grid=grid, dropped=dropped)
 
 
 def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, align: str | None = None, separator: str | None = None) -> RenderedMessage:
@@ -952,6 +987,8 @@ def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str 
         if row_idx < profile.rows:
             _place_line(grid, row_idx, "NO DATA", align="center")
         return RenderedMessage(profile=profile, grid=grid)
+
+    dropped: list[str] = []
 
     # Determine color-tile reserve first (based on all columns).
     all_columns = list(rows[0].keys())
@@ -1025,6 +1062,8 @@ def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str 
             row_idx += 1
 
         visible_rows = rows[: max(0, profile.rows - row_idx)]
+        dropped = [_row_name(r, columns) for r in rows[len(visible_rows) :]]
+        _warn_dropped("row", dropped)
         for record in visible_rows:
             row_color = None
             data_cells = []
@@ -1053,6 +1092,8 @@ def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str 
             row_idx += 1
 
         visible_rows = rows[: max(0, profile.rows - row_idx)]
+        dropped = [_row_name(r, columns) for r in rows[len(visible_rows) :]]
+        _warn_dropped("row", dropped)
         for record in visible_rows:
             cells = []
             row_color = None
@@ -1068,7 +1109,7 @@ def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str 
                     _place_cell(grid, row_idx, profile.cols - 1, row_color)
                 row_idx += 1
 
-    return RenderedMessage(profile=profile, grid=grid)
+    return RenderedMessage(profile=profile, grid=grid, dropped=dropped)
 
 
 def _format_field(key: str, value: Any, profile: BoardProfile, style: dict | None = None) -> tuple[str, str, Color | None]:
@@ -1120,6 +1161,8 @@ def _render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | No
 
     title_rows = _header_row_count(title, subtitle, separator)
     n_entries = min(len(entries), profile.rows - title_rows)
+    dropped = [e["label"] for e in entries[n_entries:]]
+    _warn_dropped("field", dropped)
     used_rows = title_rows + n_entries
     top = (profile.rows - used_rows) // 2 if valign == "center" else 0
 
@@ -1172,7 +1215,7 @@ def _render_metrics(profile: BoardProfile, data: dict[str, Any], title: str | No
             if row >= profile.rows:
                 break
 
-    return RenderedMessage(profile=profile, grid=grid)
+    return RenderedMessage(profile=profile, grid=grid, dropped=dropped)
 
 
 def render_auto(profile: BoardProfile, payload: Any, title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, align: str | None = None, valign: str = "top", separator: str | None = None) -> RenderedMessage:
@@ -1382,9 +1425,12 @@ def _ansi_block(color: Color, ansi: bool) -> str:
     return "██"
 
 
-def _explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: bool = True) -> str:
+def _explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: bool = True, dropped: list[str] | None = None) -> str:
     """Return a human-readable breakdown of color indicators and numeric formatting
-    for a metrics payload. Returns an empty string if nothing to explain."""
+    for a metrics payload. Returns an empty string if nothing to explain.
+
+    `dropped` comes from the RenderedMessage the caller already built, so the
+    reported fields match the actual render instead of being recomputed here."""
     style = data.get("_style") if isinstance(data.get("_style"), dict) else {}
     color_rows: list[str] = []
     format_rows: list[str] = []
@@ -1496,6 +1542,14 @@ def _explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: bo
         sections.append("\n".join(["── color indicators " + "─" * 20, *color_rows]))
     if format_rows:
         sections.append("\n".join(["── numeric formatting " + "─" * 19, *format_rows]))
+    if dropped:
+        # Listed last so it is the final thing shown: these fields are absent from
+        # the board entirely, which is easy to miss in the preview above.
+        sections.append(
+            "\n".join(
+                ["── dropped (board too short) " + "─" * 11, *(f"  {name}" for name in dropped)]
+            )
+        )
     return "\n\n".join(sections) if sections else ""
 
 
@@ -1668,7 +1722,7 @@ def cli(argv: list[str] | None = None) -> int:
         if args.preview_only and args.json_only:
             raise SystemExit("choose only one of --preview-only or --json-only")
         if getattr(args, "explain", False) and isinstance(payload, dict):
-            explanation = _explain_metrics(payload, profile, ansi_color=not args.no_ansi)
+            explanation = _explain_metrics(payload, profile, ansi_color=not args.no_ansi, dropped=message.dropped)
             if explanation:
                 print(explanation)
                 print()
