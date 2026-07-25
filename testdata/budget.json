@@ -1,0 +1,10 @@
+{
+  "budget_pct": -8.4,
+  "savings_pct": 3.1,
+  "spend_delta": -1200,
+  "_style": {
+    "budget_pct": "signed",
+    "savings_pct": "signed",
+    "spend_delta": "none"
+  }
+}
