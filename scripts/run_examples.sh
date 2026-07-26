@@ -68,6 +68,9 @@ run "auto color by field name (change/delta/diff)" \
 run "signed values + suppressed tile (_style)" \
   "uv run vesta.py render --input testdata/budget.json --explain --preview-only"
 
+run "range gradient, both directions (_style range object)" \
+  "uv run vesta.py render --input testdata/health.json --explain --preview-only"
+
 run "stocks table" \
   "uv run vesta.py render --input testdata/stocks.json --preview-only"
 

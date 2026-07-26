@@ -1,0 +1,12 @@
+{
+  "mem_pct": 38,
+  "cpu_pct": 61,
+  "disk_pct": 94,
+  "cache_hit_pct": 93,
+  "_style": {
+    "mem_pct": {"good": 0, "bad": 100},
+    "cpu_pct": {"good": 0, "bad": 100},
+    "disk_pct": {"good": 0, "bad": 100},
+    "cache_hit_pct": {"good": 100, "bad": 0}
+  }
+}
