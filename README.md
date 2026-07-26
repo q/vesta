@@ -25,7 +25,7 @@ A small Python formatter / previewer / publisher for Vestaboard devices. → **[
 
 | Template | Input | Behaviour |
 |----------|-------|-----------|
-| `text` | string | Wrapped and centered text |
+| `text` | string | Wrapped and horizontally centered text |
 | `kv` | JSON object | Key / value rows. Applies `_pct`/`_curr` suffix formatting; values otherwise treated as strings. |
 | `data` | JSON object or array | Label/value rows (object) or columnar table (array). Applies suffix formatting and color indicators. |
 | `auto` | any | Picks the best renderer based on input shape (default) |
@@ -195,7 +195,7 @@ echo '{"temp":"68F","hum_pct":42,"co2":"820","noise":"38"}' | \
 │T E M P                               6 8 F │
 │H U M                                 4 2 % │
 │C O 2                                 8 2 0 │
-│N O I S E                           3 8 D B │
+│N O I S E                               3 8 │
 └────────────────────────────────────────────┘
 ```
 
@@ -245,7 +245,7 @@ For **tables** (JSON array or CSV): default is `center` (compact block, centered
 
 **`--valign [top|center]`**
 
-Vertical alignment of the content block. Default is `top`. Use `center` for breathing room when you have fewer rows than the board height.
+Vertical alignment of the content block. Defaults to `top`. Use `center` for breathing room when you have fewer rows than the board height. Applies to text, key/value, metrics, and tables alike.
 
 **`--timestamp`**
 
@@ -254,6 +254,10 @@ Adds the current time (`10:01A`, `9:30P`) to the bottom-right corner. Silently s
 **`--tz`**
 
 IANA timezone for the timestamp, e.g. `America/New_York`. Defaults to local system time.
+
+**`--24h`**
+
+Use 24-hour time (`21:30`) instead of the default 12-hour form (`9:30P`). Applies to both `--timestamp` and `--subtitle time`.
 
 **`--profile [flagship|note]`**
 
@@ -281,6 +285,30 @@ warning: 2 field(s) dropped (board too short): NET, ERRORS
 
 Columns are handled separately: a table too wide for the profile drops columns with its own warning, and `--columns 2` falls back to a single column when a pair will not fit.
 
+## Input handling
+
+Input is parsed as JSON, then CSV, then treated as plain text. Anything that is not valid JSON or CSV renders as a text board, which is what makes `echo "hello" | vesta render` work.
+
+Input that opens like JSON (`{"` or `[`) but fails to parse still renders as text — putting a raw upstream error on the board is often the point — but vesta notes it on stderr, because a truncated response body looks exactly the same:
+
+```bash
+echo '{"cpu": 91, "mem":' | vesta render --preview-only
+```
+
+```
+warning: input looks like JSON but failed to parse (Expecting value: line 1 column 19 (char 18)); rendering as text
+┌────────────── flagship 6x22 ───────────────┐
+│    ( " C P U " :   9 1 ,   " M E M " :     │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+│                                            │
+└────────────────────────────────────────────┘
+```
+
+The exit code stays 0. Escape-sequence text such as `{red} ALL GOOD` starts with `{` but is not JSON-shaped, so it renders with no warning at all.
+
 ## Example usage
 
 **Text:**
@@ -291,9 +319,9 @@ echo '"hello world"' | vesta render --preview-only
 
 ```
 ┌────────────── flagship 6x22 ───────────────┐
-│                                            │
-│                                            │
 │          H E L L O   W O R L D             │
+│                                            │
+│                                            │
 │                                            │
 │                                            │
 │                                            │
@@ -338,7 +366,7 @@ vesta render --input testdata/home.json --columns 2 \
 **CSV table** (auto-detected, centered by default):
 
 ```bash
-vesta render --input scores.csv --preview-only
+vesta render --input testdata/table.csv --preview-only
 ```
 
 ```

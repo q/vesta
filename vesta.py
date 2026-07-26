@@ -816,7 +816,7 @@ def _row_name(record: dict[str, Any], columns: list[str]) -> str:
 # -----------------------------------------------------------------------------
 
 
-def render_text(profile: BoardProfile, text: str, align: str = "center", valign: str = "center", title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, separator: str | None = None) -> RenderedMessage:
+def render_text(profile: BoardProfile, text: str, align: str = "center", valign: str = "top", title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, separator: str | None = None) -> RenderedMessage:
     text = _expand_escapes(text)
     grid = _blank_grid(profile)
     header_row = _place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator)
@@ -977,18 +977,28 @@ def render_kv(profile: BoardProfile, data: dict[str, Any], title: str | None = N
     return RenderedMessage(profile=profile, grid=grid, dropped=dropped)
 
 
-def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, align: str | None = None, separator: str | None = None) -> RenderedMessage:
+def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, align: str | None = None, separator: str | None = None, valign: str = "top") -> RenderedMessage:
     import sys
     align = align or "center"
     grid = _blank_grid(profile)
-    row_idx = _place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator)
+    title_rows = _header_row_count(title, subtitle, separator)
+
+    # Vertical offset has to be known before the header is placed, so work out how
+    # many rows the finished table will occupy first: header block, one column-label
+    # row, then as many data rows as fit.
+    # One row for the column labels (or the NO DATA line), then the data rows.
+    n_data = min(len(rows), max(0, profile.rows - title_rows - 1)) if rows else 0
+    used_rows = title_rows + 1 + n_data
+    top = max(0, (profile.rows - used_rows) // 2) if valign == "center" else 0
+
+    row_idx = _place_header(grid, profile, title, title_color, subtitle, subtitle_color, separator, start_row=top)
 
     if not rows:
         if row_idx < profile.rows:
             _place_line(grid, row_idx, "NO DATA", align="center")
         return RenderedMessage(profile=profile, grid=grid)
 
-    dropped: list[str] = []
+    dropped_rows: list[str] = []
 
     # Determine color-tile reserve first (based on all columns).
     all_columns = list(rows[0].keys())
@@ -1005,9 +1015,9 @@ def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str 
             columns.append(col)
         else:
             break
-    dropped = all_columns[len(columns):]
-    if dropped:
-        print(f"warning: {len(dropped)} column(s) dropped (board too narrow): {', '.join(dropped)}", file=sys.stderr)
+    dropped_cols = all_columns[len(columns):]
+    if dropped_cols:
+        print(f"warning: {len(dropped_cols)} column(s) dropped (board too narrow): {', '.join(dropped_cols)}", file=sys.stderr)
 
     # Determine which columns are purely numeric (for header alignment).
     numeric_cols = {
@@ -1062,8 +1072,8 @@ def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str 
             row_idx += 1
 
         visible_rows = rows[: max(0, profile.rows - row_idx)]
-        dropped = [_row_name(r, columns) for r in rows[len(visible_rows) :]]
-        _warn_dropped("row", dropped)
+        dropped_rows = [_row_name(r, columns) for r in rows[len(visible_rows) :]]
+        _warn_dropped("row", dropped_rows)
         for record in visible_rows:
             row_color = None
             data_cells = []
@@ -1092,8 +1102,8 @@ def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str 
             row_idx += 1
 
         visible_rows = rows[: max(0, profile.rows - row_idx)]
-        dropped = [_row_name(r, columns) for r in rows[len(visible_rows) :]]
-        _warn_dropped("row", dropped)
+        dropped_rows = [_row_name(r, columns) for r in rows[len(visible_rows) :]]
+        _warn_dropped("row", dropped_rows)
         for record in visible_rows:
             cells = []
             row_color = None
@@ -1109,7 +1119,7 @@ def _render_table(profile: BoardProfile, rows: list[dict[str, Any]], title: str 
                     _place_cell(grid, row_idx, profile.cols - 1, row_color)
                 row_idx += 1
 
-    return RenderedMessage(profile=profile, grid=grid, dropped=dropped)
+    return RenderedMessage(profile=profile, grid=grid, dropped=dropped_cols + dropped_rows)
 
 
 def _format_field(key: str, value: Any, profile: BoardProfile, style: dict | None = None) -> tuple[str, str, Color | None]:
@@ -1146,7 +1156,7 @@ def render_data(profile: BoardProfile, payload: dict[str, Any] | list[dict[str, 
     a list of dicts (columnar table). Applies _pct/_curr suffix formatting and
     color indicators to all fields regardless of layout."""
     if isinstance(payload, list):
-        return _render_table(profile, payload, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, align=align, separator=separator)
+        return _render_table(profile, payload, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, align=align, separator=separator, valign=valign)
     return _render_metrics(profile, payload, title=title, title_color=title_color, subtitle=subtitle, subtitle_color=subtitle_color, valign=valign, align=align or "left", separator=separator)
 
 
@@ -1234,10 +1244,19 @@ def render_auto(profile: BoardProfile, payload: Any, title: str | None = None, t
 # -----------------------------------------------------------------------------
 
 
+# Input that opens like a JSON object or array. Deliberately narrow: `{red}` and
+# friends are valid escape-sequence text, so only a brace/bracket followed by a
+# quote (or, for arrays, a nested value) counts as "this was meant to be JSON".
+_JSON_SHAPED = re.compile(r'^\s*(\{\s*"|\[\s*[\{"\d\-])')
+
+
 def _load_payload(path: str | None) -> Any:
     if path and path != "-":
-        with open(path, "r", encoding="utf-8") as f:
-            raw = f.read()
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = f.read()
+        except OSError as exc:
+            raise SystemExit(f"error: could not read {path}: {exc.strerror or exc}")
     else:
         if sys.stdin.isatty():
             raise SystemExit("error: no input provided. pipe data or use --input <file>")
@@ -1246,10 +1265,11 @@ def _load_payload(path: str | None) -> Any:
     if not raw:
         return ""
 
+    json_error: json.JSONDecodeError | None = None
     try:
         return json.loads(raw)
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as exc:
+        json_error = exc
 
     try:
         reader = csv.DictReader(io.StringIO(raw))
@@ -1270,6 +1290,12 @@ def _load_payload(path: str | None) -> Any:
             return coerced
     except Exception:
         pass
+
+    # Rendering it as text is the right call — a board showing a raw upstream error
+    # is often exactly what was wanted — but say so, since input that opens like
+    # JSON and lands here is just as often a truncated body nobody intended to post.
+    if json_error is not None and _JSON_SHAPED.match(raw):
+        print(f"warning: input looks like JSON but failed to parse ({json_error}); rendering as text", file=sys.stderr)
 
     return raw
 
@@ -1385,26 +1411,36 @@ def post_local(
 # -----------------------------------------------------------------------------
 
 
-def _compact_time(dt: datetime) -> str:
-    """Format a datetime as a short 12h time string: 10:01A, 9:30P.
-    NOTE: 24h locale support is not yet handled — always uses 12h with A/P suffix."""
+def _compact_time(dt: datetime, twenty_four_hour: bool = False) -> str:
+    """Format a datetime as a short time string: 10:01A / 9:30P, or 10:01 / 21:30
+    when twenty_four_hour is set."""
+    if twenty_four_hour:
+        return f"{dt.hour:02d}:{dt.minute:02d}"
     suffix = "A" if dt.hour < 12 else "P"
     hour = dt.hour % 12 or 12
     return f"{hour}:{dt.minute:02d}{suffix}"
 
 
-def _place_timestamp(message: RenderedMessage, tz: str | None = None, force: bool = False) -> RenderedMessage:
+def _now_in(tz: str | None) -> datetime:
+    """Current time in the given IANA zone, or local time when tz is None."""
+    if not tz:
+        return datetime.now()
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    try:
+        return datetime.now(ZoneInfo(tz))
+    except (ZoneInfoNotFoundError, ValueError):
+        raise SystemExit(f"error: unknown timezone {tz!r} (expected an IANA name, e.g. America/New_York)")
+
+
+def _place_timestamp(message: RenderedMessage, tz: str | None = None, force: bool = False, twenty_four_hour: bool = False) -> RenderedMessage:
     """Place the current time in the bottom-right of the grid if there is room.
     Requires the timestamp width plus a 2-cell buffer to be blank at the right
     of the last row. Silently skipped if there isn't room, unless force=True.
     tz accepts IANA timezone strings (e.g. 'America/New_York'); defaults to local time."""
-    if tz:
-        from zoneinfo import ZoneInfo
-        now = datetime.now(ZoneInfo(tz))
-    else:
-        now = datetime.now()
+    now = _now_in(tz)
 
-    ts = _compact_time(now)
+    ts = _compact_time(now, twenty_four_hour)
     last_row = message.grid[-1]
     buffer = 2
     has_room = all(cell == " " for cell in last_row[-(len(ts) + buffer):])
@@ -1558,7 +1594,7 @@ def _explain_metrics(data: dict[str, Any], profile: BoardProfile, ansi_color: bo
 # -----------------------------------------------------------------------------
 
 
-def _build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top", align: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, tz: str | None = None, columns: int = 1, separator: str | None = None) -> RenderedMessage:
+def _build_message(profile: BoardProfile, template: str, payload: Any, title: str | None, valign: str = "top", align: str | None = None, title_color: Color | list[Color] | None = None, subtitle: str | None = None, subtitle_color: Color | list[Color] | None = None, tz: str | None = None, columns: int = 1, separator: str | None = None, twenty_four_hour: bool = False) -> RenderedMessage:
     # A newline in the title splits it: first line → title, second line → subtitle
     # (only when no explicit subtitle was provided).
     if title and "\n" in title:
@@ -1571,12 +1607,7 @@ def _build_message(profile: BoardProfile, template: str, payload: Any, title: st
     resolved_subtitle: str | None = None
     if subtitle and title:
         if subtitle.lower() == "time":
-            if tz:
-                from zoneinfo import ZoneInfo
-                now = datetime.now(ZoneInfo(tz))
-            else:
-                now = datetime.now()
-            resolved_subtitle = _compact_time(now)
+            resolved_subtitle = _compact_time(_now_in(tz), twenty_four_hour)
         else:
             resolved_subtitle = subtitle
 
@@ -1621,11 +1652,12 @@ def cli(argv: list[str] | None = None) -> int:
         p.add_argument("--columns", type=int, choices=[1, 2], default=1, help="Number of key-value pairs per row (kv template only, default: %(default)s)")
         p.add_argument("--input", default="-", help="Path to input file, or - for stdin (default: %(default)s)")
         p.add_argument("--no-preview", action="store_true", help="Suppress terminal preview output")
-        p.add_argument("--valign", choices=["top", "center"], default="top", help="Vertical alignment of content block")
+        p.add_argument("--valign", choices=["top", "center"], default="top", help="Vertical alignment of content block (default: top)")
         p.add_argument("--align", choices=["left", "center", "right"], default=None, help="Horizontal alignment (default: center for tables, left for metrics)")
         p.add_argument("--timestamp", action="store_true", help="Add current time to bottom-right if space allows")
         p.add_argument("--force-timestamp", action="store_true", help="Add current time to bottom-right, overwriting if needed")
         p.add_argument("--tz", default=None, help="Timezone for timestamp, e.g. America/New_York (default: local)")
+        p.add_argument("--24h", dest="twenty_four_hour", action="store_true", help="Use 24-hour time (21:30) instead of 12-hour (9:30P) for --timestamp and --subtitle time")
         p.add_argument("--separator", nargs="?", const="white", default=None, metavar="PATTERN", help="Add a separator row below the title block. PATTERN: color name, 'rainbow', or comma-separated colors (default: white)")
         p.add_argument("--rainbow-offset", type=int, default=0, metavar="N", help="Phase-shift the rainbow separator by N positions (0-5)")
 
@@ -1701,10 +1733,10 @@ def cli(argv: list[str] | None = None) -> int:
     _rainbow_offset = getattr(args, "rainbow_offset", 0)
     if _separator == "rainbow" and _rainbow_offset:
         _separator = f"rainbow:{_rainbow_offset}"
-    message = _build_message(profile, args.template, payload, args.title, valign=args.valign, align=args.align, title_color=title_color, subtitle=getattr(args, "subtitle", None), subtitle_color=subtitle_color, tz=args.tz, columns=args.columns, separator=_separator)
+    message = _build_message(profile, args.template, payload, args.title, valign=args.valign, align=args.align, title_color=title_color, subtitle=getattr(args, "subtitle", None), subtitle_color=subtitle_color, tz=args.tz, columns=args.columns, separator=_separator, twenty_four_hour=getattr(args, "twenty_four_hour", False))
 
     if getattr(args, "force_timestamp", False) or getattr(args, "timestamp", False):
-        message = _place_timestamp(message, tz=args.tz, force=getattr(args, "force_timestamp", False))
+        message = _place_timestamp(message, tz=args.tz, force=getattr(args, "force_timestamp", False), twenty_four_hour=getattr(args, "twenty_four_hour", False))
 
     show_preview = not args.no_preview
     if args.command == "render" and args.json_only:
