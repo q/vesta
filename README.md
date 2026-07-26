@@ -147,7 +147,7 @@ The range object also accepts an optional `"decimals"` key to fix the number of 
 Use `--explain` to see which fields got indicators and why:
 
 ```bash
-cat metrics.json | vesta render --preview-only --explain
+cat metrics.json | vesta render --explain
 ```
 
 ## Layout flags
@@ -185,7 +185,7 @@ Phase-shifts the `rainbow` separator by `N` positions (0-5). Has no effect on so
 
 ```bash
 echo '{"temp":"68F","hum_pct":42,"co2":"820","noise":"38"}' | \
-  vesta render --template kv --title "HOME" --separator rainbow --preview-only
+  vesta render --template kv --title "HOME" --separator rainbow
 ```
 
 ```
@@ -201,7 +201,7 @@ echo '{"temp":"68F","hum_pct":42,"co2":"820","noise":"38"}' | \
 
 ```bash
 vesta render --input testdata/home.json --columns 2 \
-  --title "HOME" --title-color white --subtitle time --preview-only
+  --title "HOME" --title-color white --subtitle time
 ```
 
 ```
@@ -221,7 +221,7 @@ Pack two key-value pairs per row instead of one. Each column is sized independen
 
 ```bash
 echo '{"now":"62F","rain_pct":0,"high":"66F","low":"48F"}' | \
-  vesta render --columns 2 --preview-only
+  vesta render --columns 2
 ```
 
 ```
@@ -269,7 +269,7 @@ A board has a fixed number of rows (6 on flagship, 3 on note), and titles, subti
 
 ```bash
 echo '{"cpu_pct":91,"mem_pct":72,"disk_pct":55,"net":"1.2G","errors":3}' | \
-  vesta render --profile note --preview-only
+  vesta render --profile note
 ```
 
 ```
@@ -292,7 +292,7 @@ Input is parsed as JSON, then CSV, then treated as plain text. Anything that is 
 Input that opens like JSON (`{"` or `[`) but fails to parse still renders as text — putting a raw upstream error on the board is often the point — but vesta notes it on stderr, because a truncated response body looks exactly the same:
 
 ```bash
-echo '{"cpu": 91, "mem":' | vesta render --preview-only
+echo '{"cpu": 91, "mem":' | vesta render
 ```
 
 ```
@@ -314,7 +314,7 @@ The exit code stays 0. Escape-sequence text such as `{red} ALL GOOD` starts with
 **Text:**
 
 ```bash
-echo '"hello world"' | vesta render --preview-only
+echo '"hello world"' | vesta render
 ```
 
 ```
@@ -331,7 +331,7 @@ echo '"hello world"' | vesta render --preview-only
 **Key/value:**
 
 ```bash
-echo '{"temp": "72F", "wind": "12mph"}' | vesta render --template kv --preview-only
+echo '{"temp": "72F", "wind": "12mph"}' | vesta render --template kv
 ```
 
 ```
@@ -349,7 +349,7 @@ echo '{"temp": "72F", "wind": "12mph"}' | vesta render --template kv --preview-o
 
 ```bash
 vesta render --input testdata/home.json --columns 2 \
-  --title "HOME" --subtitle time --preview-only
+  --title "HOME" --subtitle time
 ```
 
 ```
@@ -366,7 +366,7 @@ vesta render --input testdata/home.json --columns 2 \
 **CSV table** (auto-detected, centered by default):
 
 ```bash
-vesta render --input testdata/table.csv --preview-only
+vesta render --input testdata/table.csv
 ```
 
 ```
@@ -395,7 +395,7 @@ echo '{
     "conversion_pct": {"good": 8, "bad": 2},
     "bounce_rate_pct": {"good": 30, "bad": 80}
   }
-}' | vesta render --valign center --align center --timestamp --preview-only
+}' | vesta render --valign center --align center --timestamp
 ```
 
 ```
@@ -412,7 +412,7 @@ echo '{
 **Note profile:**
 
 ```bash
-vesta render --input testdata/metrics_note.json --profile note --preview-only
+vesta render --input testdata/metrics_note.json --profile note
 ```
 
 ```
@@ -437,7 +437,7 @@ Color tiles and any Vestaboard character code can be embedded inline in text inp
 Color names match the Vestaboard tile set: `red`, `orange`, `yellow`, `green`, `blue`, `violet`, `white`, `black`, `filled`. `purple` is accepted as an alias for `violet`. Names are case-insensitive.
 
 ```bash
-echo "STATUS {green} ALL GOOD" | vesta render --preview-only
+echo "STATUS {green} ALL GOOD" | vesta render
 ```
 
 ```
@@ -452,7 +452,7 @@ echo "STATUS {green} ALL GOOD" | vesta render --preview-only
 ```
 
 ```bash
-echo "ALERT {red} CHECK ENGINE" | vesta render --preview-only
+echo "ALERT {red} CHECK ENGINE" | vesta render
 ```
 
 ```
@@ -471,6 +471,8 @@ echo "ALERT {red} CHECK ENGINE" | vesta render --preview-only
 ```bash
 cat data.json | vesta render --json-only
 ```
+
+`vesta render` prints the terminal preview and nothing else. Pass `--json-only` for the character array instead, which is the form to pipe into other tools. `--no-preview` suppresses the preview, and `--preview-only` is accepted but does nothing, since the preview is already the default.
 
 ## Publishing
 
@@ -506,7 +508,7 @@ vesta read-cloud
 
 ```bash
 cat data.json | vesta render --json-only > saved.json
-cat saved.json | vesta render --preview-only
+cat saved.json | vesta render
 ```
 
 ## Installation

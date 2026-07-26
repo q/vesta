@@ -1514,7 +1514,7 @@ class TestCliExplain(unittest.TestCase):
     def test_explain_silent_when_no_color_fields(self):
         # Plain dict with no tone-triggering keys → explain returns "" → nothing extra.
         out = self._run(
-            ["render", "--explain", "--no-preview", "--no-ansi"],
+            ["render", "--explain", "--json-only", "--no-ansi"],
             '{"name": "alice", "city": "nyc"}',
         )
         # Output should be only the JSON array (no explain block).
@@ -1567,7 +1567,7 @@ class TestCliExplain(unittest.TestCase):
         import json as _json
         out = self._run(
             ["render", "--template", "kv", "--title", "Weather",
-             "--title-color", "none", "--no-preview", "--no-ansi"],
+             "--title-color", "none", "--json-only", "--no-ansi"],
             '{"temp": 72}',
         )
         grid = _json.loads(out.strip())
@@ -1748,8 +1748,48 @@ class TestDroppedContentWarning(unittest.TestCase):
         self.assertNotIn("dropped (board too short)", out)
 
 
-class TestValign(unittest.TestCase):
-    """valign defaults to top everywhere, and --valign center now reaches tables too."""
+class TestRenderDefaultOutput(unittest.TestCase):
+    """`render` prints the preview only; the character array is opt-in.
+
+    It used to print both to stdout, leaving the default output neither readable
+    nor parseable as JSON, which is why --preview-only appeared on essentially
+    every documented invocation.
+    """
+
+    def _run(self, argv, stdin_text):
+        import contextlib
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            with contextlib.redirect_stderr(io.StringIO()):
+                with __import__("unittest.mock", fromlist=["patch"]).patch(
+                    "sys.stdin", io.StringIO(stdin_text)
+                ):
+                    cli(argv)
+        return out.getvalue()
+
+    def test_default_prints_preview_without_json(self):
+        out = self._run(["render", "--no-ansi"], '{"temp": 72}')
+        self.assertIn("flagship", out)
+        self.assertNotIn("[[", out)
+
+    def test_preview_only_is_accepted_and_identical(self):
+        plain = self._run(["render", "--no-ansi"], '{"temp": 72}')
+        explicit = self._run(["render", "--no-ansi", "--preview-only"], '{"temp": 72}')
+        self.assertEqual(plain, explicit)
+
+    def test_json_only_still_emits_parseable_json(self):
+        out = self._run(["render", "--json-only"], '{"temp": 72}')
+        self.assertIsInstance(json.loads(out.strip()), list)
+        self.assertNotIn("flagship", out)
+
+
+class TestValignAcrossTemplates(unittest.TestCase):
+    """valign defaults to top everywhere, and --valign center now reaches tables too.
+
+    Named distinctly from TestValign above: two classes sharing a name in one module
+    silently shadows the first, taking its tests out of the run.
+    """
 
     def _render(self, argv, stdin_text):
         import contextlib

@@ -4,7 +4,7 @@ try:
     from importlib.metadata import version
     __version__ = version("vestaboard-tools")
 except Exception:
-    __version__ = "0.6.0"  # fallback when running from source uninstalled
+    __version__ = "0.6.1"  # fallback when running from source uninstalled
 
 __all__ = [
     "BoardProfile",
@@ -1663,7 +1663,7 @@ def cli(argv: list[str] | None = None) -> int:
 
     render_p = sub.add_parser("render", help="Render and preview without posting")
     add_common(render_p)
-    render_p.add_argument("--preview-only", action="store_true", help="Print only the terminal preview")
+    render_p.add_argument("--preview-only", action="store_true", help="No-op; the terminal preview is the default output. Kept so existing scripts keep working")
     render_p.add_argument("--json-only", action="store_true", help="Print only the raw character array JSON")
     render_p.add_argument("--explain", action="store_true", help="Show color indicator breakdown after preview")
 
@@ -1758,9 +1758,11 @@ def cli(argv: list[str] | None = None) -> int:
             if explanation:
                 print(explanation)
                 print()
-        if args.preview_only:
-            return 0
-        print(json.dumps(message.to_characters()))
+        # The character array is opt-in. It used to print by default alongside the
+        # preview, on the same stream, which made the default output neither
+        # readable nor parseable as JSON.
+        if args.json_only:
+            print(json.dumps(message.to_characters()))
         return 0
 
     if args.command == "post-cloud":
