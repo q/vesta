@@ -2,7 +2,9 @@
 import unittest
 
 import io
+import json
 import textwrap
+from datetime import datetime
 
 from vesta import (
     FLAGSHIP,
@@ -21,6 +23,8 @@ from vesta import (
     _normalize_text,
     _place_timestamp,
     _prettify_label,
+    _compact_time,
+    _now_in,
     render_kv,
     _smart_round,
     _format_field,
@@ -689,10 +693,19 @@ class TestRenderText(unittest.TestCase):
         row2_chars = [c for c in msg.grid[2] if isinstance(c, str) and c != " "]
         self.assertTrue(len(row2_chars) > 0, "Expected content in row 2 for valign=center")
 
-    def test_valign_default_is_center(self):
+    def test_valign_default_is_top(self):
+        # render_text once centered unconditionally; when valign was added it kept
+        # "center" for compatibility while every sibling renderer defaulted to top.
+        # That lone asymmetry is what made the README document centered output the
+        # CLI never produced, so the default now matches the rest.
         msg_default = render_text(FLAGSHIP, "HELLO")
+        msg_top = render_text(FLAGSHIP, "HELLO", valign="top")
+        self.assertEqual(msg_default.grid, msg_top.grid)
+
+    def test_valign_center_still_available(self):
+        msg_top = render_text(FLAGSHIP, "HELLO", valign="top")
         msg_center = render_text(FLAGSHIP, "HELLO", valign="center")
-        self.assertEqual(msg_default.grid, msg_center.grid)
+        self.assertNotEqual(msg_top.grid, msg_center.grid)
 
     def test_valign_top_via_build_message(self):
         # Integration: valign must thread through _build_message → render_text
@@ -1658,6 +1671,216 @@ class TestRenderTextEscapes(unittest.TestCase):
         msg_name = render_text(FLAGSHIP, "{red}")
         msg_code = render_text(FLAGSHIP, "{63}")
         self.assertEqual(msg_name.to_characters(), msg_code.to_characters())
+
+
+class TestDroppedContentWarning(unittest.TestCase):
+    """Content discarded because the board is too short should be reported.
+
+    Previously these paths sliced silently, so a scripted publish could lose a
+    field with no signal in stderr, the exit code, or --explain.
+    """
+
+    def _capture(self, fn):
+        import contextlib
+
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            result = fn()
+        return result, buf.getvalue()
+
+    def test_kv_one_column_warns_and_records_dropped(self):
+        data = {c: i for i, c in enumerate("abcdefgh")}  # 8 fields, 6 rows
+        msg, err = self._capture(lambda: render_kv(FLAGSHIP, data))
+        self.assertIn("2 field(s) dropped", err)
+        self.assertIn("G", err)
+        self.assertIn("H", err)
+        self.assertEqual(msg.dropped, ["G", "H"])
+
+    def test_kv_two_column_warns_on_overflow(self):
+        data = {c: 1 for c in "abcdefghijklmn"}  # 14 fields, 12 slots
+        msg, err = self._capture(lambda: render_kv(FLAGSHIP, data, columns=2))
+        self.assertIn("2 field(s) dropped", err)
+        self.assertEqual(msg.dropped, ["M", "N"])
+
+    def test_two_column_fallback_warns_exactly_once(self):
+        # Wide content forces the 2-col path to fall back to 1-col. The drop
+        # warning must describe the layout actually rendered and fire once.
+        data = {
+            "averylonglabelone": "valuevaluevalue",
+            "averylonglabeltwo": "valuevaluevalue",
+            "c": 3, "d": 4, "e": 5, "f": 6, "g": 7, "h": 8,
+        }
+        msg, err = self._capture(lambda: render_kv(FLAGSHIP, data, columns=2))
+        self.assertEqual(err.count("dropped (board too short)"), 1)
+        self.assertEqual(msg.dropped, ["G", "H"])
+
+    def test_metrics_warns_on_note(self):
+        data = {"cpu_pct": 91, "mem_pct": 72, "disk_pct": 55, "net": "1.2G", "errors": 3}
+        msg, err = self._capture(lambda: _render_metrics(NOTE, data))
+        self.assertIn("2 field(s) dropped", err)
+        self.assertEqual(msg.dropped, ["NET", "ERRORS"])
+
+    def test_table_warns_and_names_dropped_rows(self):
+        rows = [{"n": f"r{i}", "v": i} for i in range(1, 10)]
+        msg, err = self._capture(lambda: _render_table(FLAGSHIP, rows))
+        self.assertIn("row(s) dropped", err)
+        self.assertIn("R6", err)
+        self.assertEqual(len(msg.dropped), 4)
+
+    def test_kv_no_warning_when_everything_fits(self):
+        msg, err = self._capture(lambda: render_kv(FLAGSHIP, {"a": 1, "b": 2}))
+        self.assertEqual(err, "")
+        self.assertEqual(msg.dropped, [])
+
+    def test_metrics_no_warning_when_everything_fits(self):
+        msg, err = self._capture(lambda: _render_metrics(NOTE, {"a": 1, "b": 2, "c": 3}))
+        self.assertEqual(err, "")
+        self.assertEqual(msg.dropped, [])
+
+    def test_explain_lists_dropped_fields(self):
+        out = _explain_metrics({"cpu_pct": 91}, NOTE, ansi_color=False, dropped=["NET", "ERRORS"])
+        self.assertIn("dropped (board too short)", out)
+        self.assertIn("NET", out)
+        self.assertIn("ERRORS", out)
+
+    def test_explain_omits_dropped_section_when_nothing_dropped(self):
+        out = _explain_metrics({"cpu_pct": 91}, NOTE, ansi_color=False, dropped=[])
+        self.assertNotIn("dropped (board too short)", out)
+
+
+class TestValign(unittest.TestCase):
+    """valign defaults to top everywhere, and --valign center now reaches tables too."""
+
+    def _render(self, argv, stdin_text):
+        import contextlib
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            with contextlib.redirect_stderr(io.StringIO()):
+                with __import__("unittest.mock", fromlist=["patch"]).patch(
+                    "sys.stdin", io.StringIO(stdin_text)
+                ):
+                    cli(argv)
+        return out.getvalue()
+
+    def _first_content_row(self, grid):
+        for i, row in enumerate(grid):
+            if any(cell != " " for cell in row):
+                return i
+        return -1
+
+    def test_text_top_aligns_through_the_cli(self):
+        # render_text's own default is center (see TestRenderText), but the CLI
+        # threads --valign top through _build_message. The README documented the
+        # library default rather than what the documented command actually prints.
+        out = self._render(["render", "--json-only"], '"hello world"')
+        grid = json.loads(out)
+        self.assertNotEqual(grid[0], [0] * FLAGSHIP.cols)
+
+    def test_table_honours_valign_center(self):
+        rows = [{"name": "alice", "score": 98}]
+        top = _render_table(FLAGSHIP, rows, valign="top")
+        centered = _render_table(FLAGSHIP, rows, valign="center")
+        self.assertEqual(self._first_content_row(top.grid), 0)
+        self.assertGreater(self._first_content_row(centered.grid), 0)
+
+    def test_metrics_honours_valign_center(self):
+        data = {"a": 1, "b": 2}
+        top = _render_metrics(FLAGSHIP, data, valign="top")
+        centered = _render_metrics(FLAGSHIP, data, valign="center")
+        self.assertEqual(self._first_content_row(top.grid), 0)
+        self.assertGreater(self._first_content_row(centered.grid), 0)
+
+    def test_cli_default_is_top(self):
+        out = self._render(["render", "--json-only"], '{"a": 1, "b": 2}')
+        grid = json.loads(out)
+        self.assertNotEqual(grid[0], [0] * FLAGSHIP.cols)
+
+    def test_cli_valign_center_shifts_content_down(self):
+        out = self._render(["render", "--json-only", "--valign", "center"], '{"a": 1, "b": 2}')
+        grid = json.loads(out)
+        self.assertEqual(grid[0], [0] * FLAGSHIP.cols)
+
+
+class TestJsonShapedInputErrors(unittest.TestCase):
+    """Malformed JSON still renders as text — displaying a raw upstream error is a
+    legitimate use — but it warns, since a truncated body looks identical."""
+
+    def _load(self, raw):
+        import contextlib
+
+        buf = io.StringIO()
+        with __import__("unittest.mock", fromlist=["patch"]).patch(
+            "sys.stdin", io.StringIO(raw)
+        ):
+            with contextlib.redirect_stderr(buf):
+                result = _load_payload(None)
+        return result, buf.getvalue()
+
+    def test_truncated_object_renders_as_text_with_warning(self):
+        payload, err = self._load('{"cpu": 91, "mem":')
+        self.assertEqual(payload, '{"cpu": 91, "mem":')
+        self.assertIn("looks like JSON", err)
+
+    def test_truncated_array_renders_as_text_with_warning(self):
+        payload, err = self._load('[{"a": 1},')
+        self.assertEqual(payload, '[{"a": 1},')
+        self.assertIn("looks like JSON", err)
+
+    def test_escape_sequence_text_loads_without_warning(self):
+        payload, err = self._load("{red}{green} ALL GOOD")
+        self.assertEqual(payload, "{red}{green} ALL GOOD")
+        self.assertEqual(err, "")
+
+    def test_escape_sequence_text_still_loads(self):
+        # {red} is valid escape text, not malformed JSON — must not be caught.
+        self.assertEqual(self._load("{red}{green} ALL GOOD")[0], "{red}{green} ALL GOOD")
+
+    def test_plain_text_still_loads(self):
+        self.assertEqual(self._load("hello world")[0], "hello world")
+
+    def test_valid_json_still_loads(self):
+        self.assertEqual(self._load('{"a": 1}')[0], {"a": 1})
+
+    def test_missing_file_gives_clean_error(self):
+        with self.assertRaises(SystemExit) as ctx:
+            _load_payload("/nonexistent/path/nope.json")
+        self.assertIn("could not read", str(ctx.exception))
+
+
+class TestTimeFormatting(unittest.TestCase):
+    """--24h switches the timestamp and `--subtitle time` to 24-hour output."""
+
+    def test_compact_time_12h(self):
+        self.assertEqual(_compact_time(datetime(2026, 1, 1, 21, 30)), "9:30P")
+        self.assertEqual(_compact_time(datetime(2026, 1, 1, 0, 5)), "12:05A")
+
+    def test_compact_time_24h(self):
+        self.assertEqual(_compact_time(datetime(2026, 1, 1, 21, 30), True), "21:30")
+        self.assertEqual(_compact_time(datetime(2026, 1, 1, 0, 5), True), "00:05")
+        self.assertEqual(_compact_time(datetime(2026, 1, 1, 9, 5), True), "09:05")
+
+    def test_unknown_timezone_gives_clean_error(self):
+        with self.assertRaises(SystemExit) as ctx:
+            _now_in("Not/AZone")
+        self.assertIn("unknown timezone", str(ctx.exception))
+
+    def test_known_timezone_works(self):
+        self.assertIsNotNone(_now_in("America/New_York"))
+
+
+class TestTableDropRecordsBothKinds(unittest.TestCase):
+    """Dropped columns and dropped rows both reach RenderedMessage.dropped."""
+
+    def test_columns_and_rows_both_recorded(self):
+        import contextlib
+
+        # 5 columns on NOTE drops columns; 9 rows on a 3-row board drops rows.
+        rows = [{"a": i, "b": i, "c": i, "d": i, "e": i} for i in range(9)]
+        with contextlib.redirect_stderr(io.StringIO()):
+            msg = _render_table(NOTE, rows)
+        self.assertIn("e", msg.dropped)  # dropped column
+        self.assertGreater(len(msg.dropped), 1)  # plus dropped rows
 
 
 if __name__ == "__main__":

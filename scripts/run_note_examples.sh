@@ -37,7 +37,7 @@ run "metrics: color indicators via range-based style (uptime/error/rps)" \
 run "metrics: with title — 2 rows left for data" \
   "uv run vesta.py render --input testdata/metrics_note.json --profile note --title 'ENV' --title-color orange --preview-only"
 
-run "metrics: 4 entries — 4th silently clipped (3-row limit)" \
+run "metrics: 4 entries — 4th clipped (3-row limit), warns on stderr" \
   "echo '{\"a\": 1, \"b\": 2, \"c\": 3, \"d\": 4}' | uv run vesta.py render --profile note --preview-only"
 
 run "metrics: large numbers compact (\$1.28M, 28.5K)" \
